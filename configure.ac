@@ -18,6 +18,7 @@ AC_SEARCH_LIBS([XCloseDisplay], [X11])
 AC_SEARCH_LIBS([XScreenSaverQueryInfo], [Xss])
 AC_SEARCH_LIBS([XScreenSaverAllocInfo], [Xss])
 AC_SEARCH_LIBS([protobuf_c_message_pack], [protobuf-c])
+AC_SEARCH_LIBS([argp_parse], [argp])
 
 # Checks for header files.
 AC_PATH_X

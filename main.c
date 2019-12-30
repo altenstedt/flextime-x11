@@ -5,8 +5,17 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <X11/extensions/scrnsaver.h>
+#include <argp.h>
 
+#include "config.h"
 #include "measurement.pb-c.h"
+
+const char *argp_program_version = PACKAGE_STRING;
+const char *argp_program_bug_address = PACKAGE_BUGREPORT;
+
+static char doc[] = "Flextime -- tracking working hours";
+
+static struct argp argp = { 0, 0, 0, doc };
 
 // https://stackoverflow.com/a/4702411
 long get_idle_time() {
@@ -33,8 +42,9 @@ long get_idle_time() {
   return idle_time;
 }
 
-int main()
+int main(int argc, char **argv)
 {
+  argp_parse (0, argc, argv, 0, 0, 0);
   char* home = getenv("HOME");
 
   char topFolderName[1024];
