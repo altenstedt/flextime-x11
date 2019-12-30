@@ -4,7 +4,7 @@
 AC_PREREQ([2.69])
 AC_INIT(flextime, 0.14, martin.altenstedt@gmail.com)
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
-AC_CONFIG_SRCDIR([main.c])
+AC_CONFIG_SRCDIR([daemon.c])
 AC_CONFIG_HEADERS([config.h])
 
 # Checks for programs.
