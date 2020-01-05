@@ -1,5 +1,6 @@
 # Generated files
 /flextimed
+/flextime
 /config.h
 /.deps/
 *.pb-c.*
