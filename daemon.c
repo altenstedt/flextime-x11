@@ -17,6 +17,8 @@ static char doc[] = "Flextime -- tracking working hours";
 
 static struct argp argp = { 0, 0, 0, doc };
 
+static unsigned int interval = 60;
+
 // https://stackoverflow.com/a/4702411
 long get_idle_time() {
   time_t idle_time;
@@ -42,25 +44,28 @@ long get_idle_time() {
   return idle_time;
 }
 
-int main(int argc, char **argv)
-{
-  argp_parse (0, argc, argv, 0, 0, 0);
-  char* home = getenv("HOME");
+int finishing = 0;
 
-  char topFolderName[1024];
-  snprintf(topFolderName, 1024, "%s/.flextime", home);
+// sleep(3) can be interrupted by signals
+void sleep_with_interrupt(unsigned int seconds) {
+    unsigned int left = seconds;
+    while ((left > 0) && (!finishing)) {
+      left = sleep (left);
+    }
+}
 
-  char dataFolderName[1024];
-  snprintf(dataFolderName, 1024, "%s/.flextime/data", home);
-
-  if (0 == mkdir(topFolderName, 0777)) {
-    mkdir(dataFolderName, 0777);
-    printf("Created folder %s\n", dataFolderName);
-  }
-
+void create_measurement_maybe() {
   time_t now = time(NULL);
 
   long idle = get_idle_time();
+
+  // If the idle time is larger than the interval, we do not create a
+  // measurement since there is nothing to add to the already created
+  // measurements.  The time between measurement is not perfect, so be on
+  // the safe side, we compared to a somewhat larger value.
+  if (idle > interval * 1.5) {
+    return;
+  }
 
   Measurement msg = MEASUREMENT__INIT;
   void *buf;
@@ -78,6 +83,8 @@ int main(int argc, char **argv)
   char formatTimeBuffer[20];
   strftime(formatTimeBuffer, 20, "%FT%TZ", localtime(&now));
 
+  char* home = getenv("HOME");
+
   char fileName[1024];
   snprintf(fileName, 1024, "%s/.flextime/data/%s.bin", home, formatTimeBuffer);
   FILE *file = fopen(fileName, "w+");
@@ -89,6 +96,28 @@ int main(int argc, char **argv)
   fclose(file);
 
   free(buf);
+}
+
+int main(int argc, char **argv)
+{
+  argp_parse (0, argc, argv, 0, 0, 0);
+  char* home = getenv("HOME");
+
+  char topFolderName[1024];
+  snprintf(topFolderName, 1024, "%s/.flextime", home);
+
+  char dataFolderName[1024];
+  snprintf(dataFolderName, 1024, "%s/.flextime/data", home);
+
+  if (0 == mkdir(topFolderName, 0777)) {
+    mkdir(dataFolderName, 0777);
+    printf("Created folder %s\n", dataFolderName);
+  }
+
+  while (1) {
+    create_measurement_maybe();
+    sleep_with_interrupt(interval);
+  }
 
   return 0;
 }
