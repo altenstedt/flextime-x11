@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <X11/extensions/scrnsaver.h>
 #include <argp.h>
+#include <signal.h>
 
 #include "config.h"
 #include "measurement.pb-c.h"
@@ -18,12 +19,10 @@ static char doc[] = "Flextime -- tracking working hours";
 
 static struct argp argp = { 0, 0, 0, doc };
 
-#define PARENT_COUNT 3
+#define PARENT_COUNT 15
 
 static unsigned int interval = 60; // seconds, should be called measurement interval
 static unsigned int flushInterval = PARENT_COUNT * 60; // seconds
-
-
 
 Measurement measurements[PARENT_COUNT]; // the number of measurements within a flush
 int idx = 0;
@@ -32,8 +31,45 @@ Measurements parent;
 void *parent_buf;
 unsigned parent_len;
 
+void create_measurements(unsigned int interval, const char* zone) {
+  Measurements msgs = MEASUREMENTS__INIT;
+
+  msgs.interval = interval;
+
+  size_t size = strlen(zone);
+  msgs.zone = malloc(sizeof(char) * size);
+
+  strcpy(msgs.zone, zone);
+  
+  msgs.n_measurements = idx;
+  msgs.measurements = malloc(sizeof(Measurement) * idx);
+
+  for (int i = 0; i < idx; i++) {
+    msgs.measurements[i] = malloc(sizeof(Measurement));
+    measurement__init(msgs.measurements[i]);
+
+    msgs.measurements[i]->kind = measurements[i].kind;
+    msgs.measurements[i]->idle = measurements[i].idle;
+    msgs.measurements[i]->timestamp = measurements[i].timestamp;
+  }
+
+  parent_len = measurements__get_packed_size(&msgs);
+
+  parent_buf = malloc(parent_len);
+  measurements__pack(&msgs, parent_buf);
+  
+  parent = msgs;
+}
+
 void flush_measurements() {
+  if (idx == 0) {
+    return; // Nothing to flush
+  }
+
   time_t now = time(NULL);
+
+  char* zone = localtime(&now)->tm_zone;
+  create_measurements(interval, zone);
 
   char formatTimeBuffer[20];
   strftime(formatTimeBuffer, 20, "%FT%TZ", localtime(&now));
@@ -60,36 +96,6 @@ void initialize_measurements() {
 
     measurements[i] = msg;
   }
-}
-
-void create_measurements(unsigned int interval, const char* zone, const Measurement measurements[], const int length) {
-  Measurements msgs = MEASUREMENTS__INIT;
-
-  msgs.interval = interval;
-
-  size_t size = strlen(zone);
-  msgs.zone = malloc(sizeof(char) * size);
-
-  strcpy(msgs.zone, zone);
-  
-  msgs.n_measurements = length;
-  msgs.measurements = malloc(sizeof(Measurement) * length);
-
-  for (int i = 0; i < length; i++) {
-    msgs.measurements[i] = malloc(sizeof(Measurement));
-    measurement__init(msgs.measurements[i]);
-
-    msgs.measurements[i]->kind = measurements[i].kind;
-    msgs.measurements[i]->idle = measurements[i].idle;
-    msgs.measurements[i]->timestamp = measurements[i].timestamp;
-  }
-
-  parent_len = measurements__get_packed_size(&msgs);
-
-  parent_buf = malloc(parent_len);
-  measurements__pack(&msgs, parent_buf);
-  
-  parent = msgs;
 }
 
 // https://stackoverflow.com/a/4702411
@@ -147,11 +153,20 @@ void create_measurement_maybe() {
   idx++;
 
   if (idx == PARENT_COUNT) {
-    char* zone = localtime(&now)->tm_zone;
-    create_measurements(interval, zone, measurements, PARENT_COUNT);
     flush_measurements();
-    idx = 0; // reset
+    idx = 0;
   }
+}
+
+void sighandler(int signum) {
+   printf("Caught signal %d, flushing measurements.\n", signum);
+
+   flush_measurements();
+   idx = 0;
+
+   if (signum != SIGUSR1) {
+     exit(0);
+   }
 }
 
 int main(int argc, char **argv)
@@ -173,6 +188,13 @@ int main(int argc, char **argv)
   time_t now = time(NULL);
   char* zone = localtime(&now)->tm_zone;
 
+  signal(SIGINT, sighandler);
+  signal(SIGQUIT, sighandler);
+  signal(SIGABRT, sighandler);
+  signal(SIGTSTP, sighandler);
+  signal(SIGTERM, sighandler);
+  signal(SIGUSR1, sighandler);
+  
   initialize_measurements();
 
   while (1) {
