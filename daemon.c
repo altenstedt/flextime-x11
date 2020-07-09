@@ -1,4 +1,5 @@
 #include <time.h>
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -17,7 +18,79 @@ static char doc[] = "Flextime -- tracking working hours";
 
 static struct argp argp = { 0, 0, 0, doc };
 
-static unsigned int interval = 60;
+#define PARENT_COUNT 3
+
+static unsigned int interval = 60; // seconds, should be called measurement interval
+static unsigned int flushInterval = PARENT_COUNT * 60; // seconds
+
+
+
+Measurement measurements[PARENT_COUNT]; // the number of measurements within a flush
+int idx = 0;
+
+Measurements parent;
+void *parent_buf;
+unsigned parent_len;
+
+void flush_measurements() {
+  time_t now = time(NULL);
+
+  char formatTimeBuffer[20];
+  strftime(formatTimeBuffer, 20, "%FT%TZ", localtime(&now));
+
+  char* home = getenv("HOME");
+
+  char fileName[1024];
+  snprintf(fileName, 1024, "%s/.flextime/data/%s.bin", home, formatTimeBuffer);
+  FILE *file = fopen(fileName, "w+");
+
+  fwrite(parent_buf, parent_len, 1, file);
+
+  fclose(file);
+}
+
+void initialize_measurements() {
+  for (int i = 0; i < PARENT_COUNT; i++) {
+    Measurement msg = MEASUREMENT__INIT;
+
+    parent_len = measurement__get_packed_size(&msg);
+
+    parent_buf = malloc(parent_len);
+    measurement__pack(&msg, parent_buf);
+
+    measurements[i] = msg;
+  }
+}
+
+void create_measurements(unsigned int interval, const char* zone, const Measurement measurements[], const int length) {
+  Measurements msgs = MEASUREMENTS__INIT;
+
+  msgs.interval = interval;
+
+  size_t size = strlen(zone);
+  msgs.zone = malloc(sizeof(char) * size);
+
+  strcpy(msgs.zone, zone);
+  
+  msgs.n_measurements = length;
+  msgs.measurements = malloc(sizeof(Measurement) * length);
+
+  for (int i = 0; i < length; i++) {
+    msgs.measurements[i] = malloc(sizeof(Measurement));
+    measurement__init(msgs.measurements[i]);
+
+    msgs.measurements[i]->kind = measurements[i].kind;
+    msgs.measurements[i]->idle = measurements[i].idle;
+    msgs.measurements[i]->timestamp = measurements[i].timestamp;
+  }
+
+  parent_len = measurements__get_packed_size(&msgs);
+
+  parent_buf = malloc(parent_len);
+  measurements__pack(&msgs, parent_buf);
+  
+  parent = msgs;
+}
 
 // https://stackoverflow.com/a/4702411
 long get_idle_time() {
@@ -67,35 +140,18 @@ void create_measurement_maybe() {
     return;
   }
 
-  Measurement msg = MEASUREMENT__INIT;
-  void *buf;
-  unsigned len;
+  measurements[idx].kind = MEASUREMENT__KIND__MEASUREMENT;
+  measurements[idx].idle = idle;
+  measurements[idx].timestamp = (intmax_t)now;
 
-  msg.kind = MEASUREMENT__KIND__MEASUREMENT;
-  msg.idle = idle;
-  msg.timestamp = (intmax_t)now;
+  idx++;
 
-  len = measurement__get_packed_size(&msg);
-
-  buf = malloc(len);
-  measurement__pack(&msg,buf);
-
-  char formatTimeBuffer[20];
-  strftime(formatTimeBuffer, 20, "%FT%TZ", localtime(&now));
-
-  char* home = getenv("HOME");
-
-  char fileName[1024];
-  snprintf(fileName, 1024, "%s/.flextime/data/%s.bin", home, formatTimeBuffer);
-  FILE *file = fopen(fileName, "w+");
-
-  printf("Writing %d bytes of idle %ld to %s\n", len, idle, fileName);
-
-  fwrite(buf, len, 1, file);
-
-  fclose(file);
-
-  free(buf);
+  if (idx == PARENT_COUNT) {
+    char* zone = localtime(&now)->tm_zone;
+    create_measurements(interval, zone, measurements, PARENT_COUNT);
+    flush_measurements();
+    idx = 0; // reset
+  }
 }
 
 int main(int argc, char **argv)
@@ -113,6 +169,11 @@ int main(int argc, char **argv)
     mkdir(dataFolderName, 0777);
     printf("Created folder %s\n", dataFolderName);
   }
+
+  time_t now = time(NULL);
+  char* zone = localtime(&now)->tm_zone;
+
+  initialize_measurements();
 
   while (1) {
     create_measurement_maybe();

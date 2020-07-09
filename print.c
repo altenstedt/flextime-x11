@@ -39,27 +39,99 @@ read_buffer (unsigned max_length, uint8_t *out, FILE* file)
   return cur_len;
 }
 
+
+struct dates {
+  char date[9];
+  unsigned int start;
+  unsigned int stop;
+};
+
+#define DATE_SIZE 3
+struct dates dates[DATE_SIZE];
+unsigned int dates_index = 0;
+
+void add_or_update(Measurement measurement) {
+  for (int i = 0; i < DATE_SIZE; i++) {
+    time_t t = (time_t)measurement.timestamp;
+
+    char date[9];
+    strftime(date, 9, "%Y%m%d", localtime(&t));
+
+    int index = -1;
+    for (int j = 0; j < dates_index; j++) {
+      if (strcmp(dates[j].date, date) == 0) {
+        if (dates[j].start > measurement.timestamp) {
+          dates[j].start = measurement.timestamp;
+        }
+
+        if (dates[j].stop < measurement.timestamp) {
+          dates[j].stop = measurement.timestamp;
+        }
+
+        index = j;
+        break;
+      }
+    }
+
+    if (index == -1) {
+      strcpy(dates[dates_index].date, date);
+      dates[dates_index].start = measurement.timestamp;
+      dates[dates_index].stop = measurement.timestamp;
+
+      dates_index++;
+    }
+  }
+}
+
+void print_dates() {
+  for (int i = 0; i < dates_index; i++) {
+
+    time_t start_time = (time_t)dates[i].start;
+    char start[9];
+    strftime(start, 9, "%H:%M:%S", localtime(&start_time));
+
+    time_t stop_time = (time_t)dates[i].stop;
+    char stop[9];
+    strftime(stop, 9, "%H:%M:%S", localtime(&stop_time));
+
+    char day[14];
+    strftime(day, 14, "%A", localtime(&start_time));
+
+    char week[3];
+    strftime(week, 3, "%V", localtime(&start_time));
+
+    unsigned int seconds = dates[i].stop - dates[i].start;
+    unsigned int hours = (seconds - (seconds % 3600)) / 3600;
+    unsigned int minutes = ((seconds - hours * 60 * 60) - (seconds % 60)) / 60;
+    printf("%s %s — %s %2d:%02d w/%2s %s\n", dates[i].date, start, stop, hours, minutes, week, day);
+  }  
+}
+
 void read_file(FILE* file) {
-  Measurement *msg;
+  Measurements *msgs;
 
   uint8_t buf[MAX_MSG_SIZE];
   size_t msg_len = read_buffer(MAX_MSG_SIZE, buf, file);
 
-  msg = measurement__unpack(NULL, msg_len, buf);	
-  if (msg == NULL)
+  msgs = measurements__unpack(NULL, msg_len, buf);	
+  if (msgs == NULL)
   {
     fprintf(stderr, "error unpacking incoming message\n");
     exit(1);
   }
 
-  time_t t = (time_t)msg->timestamp;
+  for (int i = 0; i < msgs->n_measurements; i++) {
+    Measurement msg = *msgs->measurements[i];
 
-  char buffer[20];
-  strftime(buffer, 20, "%Y-%m-%d %H:%M:%S", localtime(&t));
+    time_t t = (time_t)msg.timestamp;
 
-  printf("Parsed: %s %d %d\n", buffer, msg->idle, msg->kind);
+    char buffer[20];
+    strftime(buffer, 20, "%Y-%m-%d %H:%M:%S", localtime(&t));
 
-  measurement__free_unpacked(msg, NULL);
+    add_or_update(msg);
+  }
+
+  measurements__free_unpacked(msgs, NULL);
 }
 
 int main(int argc, char **argv)
@@ -104,6 +176,8 @@ int main(int argc, char **argv)
   }
 
   closedir(dir);
+
+  print_dates();
 
   return 0;
 }

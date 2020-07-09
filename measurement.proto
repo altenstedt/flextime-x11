@@ -12,3 +12,9 @@ message Measurement {
   Kind kind = 2;
   uint32 idle = 3;
 }
+
+message Measurements {
+  uint32 interval = 1;
+  string zone = 2;
+  repeated Measurement measurements = 3;
+}
