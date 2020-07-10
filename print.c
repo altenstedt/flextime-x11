@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <X11/extensions/scrnsaver.h>
 #include <argp.h>
+#include <signal.h>
+#include <time.h>
 
 #include "config.h"
 #include "measurement.pb-c.h"
@@ -134,6 +136,50 @@ void read_file(FILE* file) {
   measurements__free_unpacked(msgs, NULL);
 }
 
+// https://stackoverflow.com/a/6898456
+pid_t proc_find(const char* name) 
+{
+    DIR* dir;
+    struct dirent* ent;
+    char* endptr;
+    char buf[512];
+
+    if (!(dir = opendir("/proc"))) {
+        perror("can't open /proc");
+        return -1;
+    }
+
+    while((ent = readdir(dir)) != NULL) {
+        /* if endptr is not a null character, the directory is not
+         * entirely numeric, so ignore it */
+        long lpid = strtol(ent->d_name, &endptr, 10);
+        if (*endptr != '\0') {
+            continue;
+        }
+
+        /* try to open the cmdline file */
+        snprintf(buf, sizeof(buf), "/proc/%ld/cmdline", lpid);
+        FILE* fp = fopen(buf, "r");
+
+        if (fp) {
+            if (fgets(buf, sizeof(buf), fp) != NULL) {
+                /* check the first token in the file, the program name */
+                char* first = strtok(buf, " ");
+                if (!strcmp(first, name)) {
+                    fclose(fp);
+                    closedir(dir);
+                    return (pid_t)lpid;
+                }
+            }
+            fclose(fp);
+        }
+
+    }
+
+    closedir(dir);
+    return -1;
+}
+
 int main(int argc, char **argv)
 {
   argp_parse (0, argc, argv, 0, 0, 0);
@@ -148,6 +194,19 @@ int main(int argc, char **argv)
     printf("Folder %s does not exist.\n", dataFolderName);
 
     return 1;
+  }
+
+  pid_t pid = proc_find("./flextimed");
+
+  if (pid >= 0  ) {
+    kill(pid, SIGUSR1);
+
+    struct timespec ts;
+    ts.tv_sec = 0;
+    ts.tv_nsec = 200 * 1000; // nano seconds
+
+    // Wait just a little while for the daemon to flush
+    nanosleep(&ts, NULL);
   }
 
   FILE* fd;
