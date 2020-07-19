@@ -8,6 +8,7 @@
 #include <X11/extensions/scrnsaver.h>
 #include <argp.h>
 #include <signal.h>
+#include <syslog.h>
 
 #include "config.h"
 #include "measurement.pb-c.h"
@@ -159,20 +160,80 @@ void create_measurement_maybe() {
 }
 
 void sighandler(int signum) {
-   printf("Caught signal %d, flushing measurements.\n", signum);
+   syslog(LOG_NOTICE, "Caught signal %d, flushing measurements.\n", signum);
 
    flush_measurements();
    idx = 0;
 
    if (signum != SIGUSR1) {
+     syslog (LOG_NOTICE, "Flextime daemon terminated.");
+     closelog();
      exit(0);
    }
+}
+
+// https://github.com/pasce/daemon-skeleton-linux-c
+static void skeleton_daemon()
+{
+    pid_t pid;
+    
+    /* Fork off the parent process */
+    pid = fork();
+    
+    /* An error occurred */
+    if (pid < 0)
+        exit(EXIT_FAILURE);
+    
+     /* Success: Let the parent terminate */
+    if (pid > 0)
+        exit(EXIT_SUCCESS);
+    
+    /* On success: The child process becomes session leader */
+    if (setsid() < 0)
+        exit(EXIT_FAILURE);
+    
+    /* Catch, ignore and handle signals */
+    /*TODO: Implement a working signal handler */
+    signal(SIGCHLD, SIG_IGN);
+    signal(SIGHUP, SIG_IGN);
+    
+    /* Fork off for the second time*/
+    pid = fork();
+    
+    /* An error occurred */
+    if (pid < 0)
+        exit(EXIT_FAILURE);
+    
+    /* Success: Let the parent terminate */
+    if (pid > 0)
+        exit(EXIT_SUCCESS);
+    
+    /* Set new file permissions */
+    umask(0);
+    
+    /* Change the working directory to the root directory */
+    /* or another appropriated directory */
+    chdir("/");
+    
+    /* Close all open file descriptors */
+    int x;
+    for (x = sysconf(_SC_OPEN_MAX); x>=0; x--)
+    {
+        close (x);
+    }
+    
+    /* Open the log file */
+    openlog ("flextime", LOG_PID, LOG_DAEMON);
 }
 
 int main(int argc, char **argv)
 {
   argp_parse (0, argc, argv, 0, 0, 0);
   char* home = getenv("HOME");
+
+  skeleton_daemon();
+
+  syslog (LOG_NOTICE, "Flextime daemon started.");
 
   char topFolderName[1024];
   snprintf(topFolderName, 1024, "%s/.flextime", home);
@@ -182,13 +243,14 @@ int main(int argc, char **argv)
 
   if (0 == mkdir(topFolderName, 0777)) {
     mkdir(dataFolderName, 0777);
-    printf("Created folder %s\n", dataFolderName);
+    syslog (LOG_NOTICE, "Created folder %s\n", dataFolderName);
   }
 
   time_t now = time(NULL);
   char* zone = localtime(&now)->tm_zone;
 
   signal(SIGINT, sighandler);
+  signal(SIGHUP, sighandler);
   signal(SIGQUIT, sighandler);
   signal(SIGABRT, sighandler);
   signal(SIGTSTP, sighandler);
@@ -201,6 +263,9 @@ int main(int argc, char **argv)
     create_measurement_maybe();
     sleep_with_interrupt(interval);
   }
+
+  syslog (LOG_NOTICE, "Flextime daemon terminated.");
+  closelog();
 
   return 0;
 }
