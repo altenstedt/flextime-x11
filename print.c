@@ -136,6 +136,18 @@ void read_file(FILE* file) {
   measurements__free_unpacked(msgs, NULL);
 }
 
+// https://stackoverflow.com/a/744822
+int endsWith(const char *str, const char *suffix)
+{
+    if (!str || !suffix)
+        return 0;
+    size_t lenstr = strlen(str);
+    size_t lensuffix = strlen(suffix);
+    if (lensuffix >  lenstr)
+        return 0;
+    return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
+}
+
 // https://stackoverflow.com/a/6898456
 pid_t proc_find(const char* name) 
 {
@@ -165,7 +177,7 @@ pid_t proc_find(const char* name)
             if (fgets(buf, sizeof(buf), fp) != NULL) {
                 /* check the first token in the file, the program name */
                 char* first = strtok(buf, " ");
-                if (!strcmp(first, name)) {
+                if (endsWith(first, name)) {
                     fclose(fp);
                     closedir(dir);
                     return (pid_t)lpid;
@@ -196,7 +208,7 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  pid_t pid = proc_find("./flextimed");
+  pid_t pid = proc_find("flextimed");
 
   if (pid >= 0  ) {
     kill(pid, SIGUSR1);
