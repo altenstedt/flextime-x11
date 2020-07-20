@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include<sys/dir.h>
 #include <unistd.h>
 #include <X11/extensions/scrnsaver.h>
 #include <argp.h>
@@ -222,22 +223,24 @@ int main(int argc, char **argv)
   }
 
   FILE* fd;
-  DIR* dir;
   struct dirent* file;
-
-  dir = opendir(dataFolderName);
 
   char path[MAX_PATH];
 
-  while (file = readdir(dir))
-  {
-    char *dot = strrchr(file->d_name, '.');
+  struct dirent **namelist;
+  int n = scandir(dataFolderName, &namelist, 0, alphasort);
+  if (n < 0) {
+    perror("scandir");
+  }
+
+  while(n--) {
+    char *dot = strrchr(namelist[n]->d_name, '.');
 
     if (dot == NULL || strcmp(dot, ".bin")) {
       continue;
     }
 
-    snprintf(path, MAX_PATH, "%s/%s", dataFolderName, file->d_name);
+    snprintf(path, MAX_PATH, "%s/%s", dataFolderName, namelist[n]->d_name);
 
     fd = fopen(path, "r");
 
@@ -246,7 +249,7 @@ int main(int argc, char **argv)
     fclose(fd);
   }
 
-  closedir(dir);
+  free(namelist);
 
   print_dates();
 
