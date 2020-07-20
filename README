@@ -1,1 +1,19 @@
 This directory holds FLextime, a program for tracking working hours
+
+`configure` will probe the system for dependencies.  On a Fedora 32
+system, I had to install the following packages:
+
+```
+dnf install protobuf-c-compiler
+dnf install protobuf-c-devel
+dnf install libXScrnSaver-devel
+```
+
+Using the follwing commands to find the packages:
+
+```
+dnf provides protoc-c
+dnf provides "*/protobuf-c/protobuf-c.h"
+dnf provides "*/extensions/scrnsaver.h"
+```
+
