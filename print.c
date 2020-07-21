@@ -18,12 +18,8 @@
 #define MAX_MSG_SIZE 1024
 #define MAX_PATH 4096 // https://stackoverflow.com/a/9449307
 
-const char *argp_program_version = PACKAGE_STRING;
-const char *argp_program_bug_address = PACKAGE_BUGREPORT;
-
-static char doc[] = "Flextime -- tracking working hours";
-
-static struct argp argp = { 0, 0, 0, doc };
+static unsigned int fixed = 60 * 10;
+static int splitWeeks = 0;
 
 static size_t
 read_buffer (unsigned max_length, uint8_t *out, FILE* file)
@@ -153,14 +149,14 @@ void print_day(time_t start_time, time_t stop_time, unsigned int work) {
 
   unsigned int seconds = stop_time - start_time;
   unsigned int hours;
-  unsigned int minutes;
+    unsigned int minutes;
   unsigned int work_hours;
   unsigned int work_minutes;
 
   parseTime(seconds, &hours, &minutes);
   parseTime(work, &work_hours, &work_minutes);
 
-  printf("%s %s — %s %2d:%02d (%2d:%02d) w/%2s %s\n", date, start, stop, hours, minutes, work_hours, work_minutes, week, day);
+  printf("%s %s — %s %2d:%02d | %d:%02d w/%2s %s\n", date, start, stop, hours, minutes, work_hours, work_minutes, week, day);
 }
 
 void print_timestamps() {
@@ -176,15 +172,28 @@ void print_timestamps() {
   char date[9];
   strftime(date, 9, "%Y%m%d", localtime(&t));
 
-  for (int i = 0; i < ntimestamps; i++) {
+  char week[3];
+  strftime(week, 3, "%V", localtime(&t));
 
+  for (int i = 0; i < ntimestamps; i++) {
     t = (time_t)timestamps[i];
 
     char current[9];
     strftime(current, 9, "%Y%m%d", localtime(&t));
 
+    char current_week[3];
+    strftime(current_week, 3, "%V", localtime(&t));
+
     if (strcmp(current, date) != 0) {
       print_day(start_time, stop_time, work);
+
+      if (strcmp(current_week, week) != 0) {
+        if (splitWeeks) {
+          printf("\n");
+        }
+
+        strcpy(week, current_week);
+      }
 
       start_time = (time_t)timestamps[i];
       stop_time = (time_t)timestamps[i];
@@ -195,10 +204,12 @@ void print_timestamps() {
       // Same day
       stop_time = (time_t)timestamps[i];
 
-      unsigned int fixed = 10 * 60;// 10 minutes
+      if (i > 0) {
+        time_t previous_stop_time = (time_t)timestamps[i - 1];
 
-      if (stop_time - start_time < fixed) {
-        work += stop_time - start_time;
+        if (stop_time - previous_stop_time < fixed) {
+          work += stop_time - previous_stop_time;
+        }
       }
 
       if (i == ntimestamps - 1) {
@@ -212,10 +223,85 @@ void print_timestamps() {
 int intcmp (const void * a, const void * b) {
    return ( *(int*)a - *(int*)b );
 }
+const char *argp_program_version = PACKAGE_STRING;
+const char *argp_program_bug_address = PACKAGE_BUGREPORT;
+
+static char doc[] = "Flextime -- tracking working hours";
+
+/* A description of the arguments we accept. */
+static char args_doc[] = "ARG1 ARG2";
+
+/* The options we understand. */
+static struct argp_option options[] = {
+  {"split-week", 'w', 0, 0,  "Split weeks" },
+  {"idle", 'i', "minutes", 0, "Idle limit in minutes, default to 10" },
+  { 0 }
+};
+
+/* Used by main to communicate with parse_opt. */
+struct arguments
+{
+  char *args[2];                /* arg1 & arg2 */
+  int splitWeeks;
+  unsigned int idle;
+};
+
+/* Parse a single option. */
+static error_t
+parse_opt (int key, char *arg, struct argp_state *state)
+{
+  /* Get the input argument from argp_parse, which we
+     know is a pointer to our arguments structure. */
+  struct arguments *arguments = state->input;
+
+  switch (key)
+    {
+    case 'w': 
+      arguments->splitWeeks = 1;
+      break;
+    case 'i':
+      arguments->idle = atoi(arg);
+      break;
+
+    case ARGP_KEY_ARG:
+      if (state->arg_num >= 2)
+        /* Too many arguments. */
+        argp_usage (state);
+
+      arguments->args[state->arg_num] = arg;
+
+      break;
+
+    case ARGP_KEY_END:
+      if (state->arg_num < 0)
+        /* Not enough arguments. */
+        argp_usage (state);
+      break;
+
+    default:
+      return ARGP_ERR_UNKNOWN;
+    }
+  return 0;
+}
+
+/* Our argp parser. */
+static struct argp argp = { options, parse_opt, args_doc, doc };
 
 int main(int argc, char **argv)
 {
-  argp_parse (0, argc, argv, 0, 0, 0);
+  struct arguments arguments;
+
+  /* Default values. */
+  arguments.splitWeeks = 0;
+  arguments.idle = 10;
+
+  /* Parse our arguments; every option seen by parse_opt will
+     be reflected in arguments. */
+  argp_parse (&argp, argc, argv, 0, 0, &arguments);
+
+  fixed = arguments.idle * 60;
+  splitWeeks = arguments.splitWeeks;
+
   char* home = getenv("HOME");
 
   char dataFolderName[1024];
