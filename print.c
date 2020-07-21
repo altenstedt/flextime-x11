@@ -42,73 +42,8 @@ read_buffer (unsigned max_length, uint8_t *out, FILE* file)
   return cur_len;
 }
 
-
-struct dates {
-  char date[9];
-  unsigned int start;
-  unsigned int stop;
-};
-
-#define DATE_SIZE 3
-struct dates dates[DATE_SIZE];
-unsigned int dates_index = 0;
-
-void add_or_update(Measurement measurement) {
-  for (int i = 0; i < DATE_SIZE; i++) {
-    time_t t = (time_t)measurement.timestamp;
-
-    char date[9];
-    strftime(date, 9, "%Y%m%d", localtime(&t));
-
-    int index = -1;
-    for (int j = 0; j < dates_index; j++) {
-      if (strcmp(dates[j].date, date) == 0) {
-        if (dates[j].start > measurement.timestamp) {
-          dates[j].start = measurement.timestamp;
-        }
-
-        if (dates[j].stop < measurement.timestamp) {
-          dates[j].stop = measurement.timestamp;
-        }
-
-        index = j;
-        break;
-      }
-    }
-
-    if (index == -1) {
-      strcpy(dates[dates_index].date, date);
-      dates[dates_index].start = measurement.timestamp;
-      dates[dates_index].stop = measurement.timestamp;
-
-      dates_index++;
-    }
-  }
-}
-
-void print_dates() {
-  for (int i = 0; i < dates_index; i++) {
-
-    time_t start_time = (time_t)dates[i].start;
-    char start[9];
-    strftime(start, 9, "%H:%M:%S", localtime(&start_time));
-
-    time_t stop_time = (time_t)dates[i].stop;
-    char stop[9];
-    strftime(stop, 9, "%H:%M:%S", localtime(&stop_time));
-
-    char day[14];
-    strftime(day, 14, "%A", localtime(&start_time));
-
-    char week[3];
-    strftime(week, 3, "%V", localtime(&start_time));
-
-    unsigned int seconds = dates[i].stop - dates[i].start;
-    unsigned int hours = (seconds - (seconds % 3600)) / 3600;
-    unsigned int minutes = ((seconds - hours * 60 * 60) - (seconds % 60)) / 60;
-    printf("%s %s — %s %2d:%02d w/%2s %s\n", dates[i].date, start, stop, hours, minutes, week, day);
-  }  
-}
+static unsigned int *timestamps = NULL;
+static unsigned int ntimestamps = 0;
 
 void read_file(FILE* file) {
   Measurements *msgs;
@@ -123,16 +58,18 @@ void read_file(FILE* file) {
     exit(1);
   }
 
+  timestamps = realloc(timestamps, (ntimestamps + msgs->n_measurements) * sizeof(unsigned int));
+
   for (int i = 0; i < msgs->n_measurements; i++) {
     Measurement msg = *msgs->measurements[i];
 
     time_t t = (time_t)msg.timestamp;
+    unsigned int idle = msg.idle;
 
-    char buffer[20];
-    strftime(buffer, 20, "%Y-%m-%d %H:%M:%S", localtime(&t));
-
-    add_or_update(msg);
+    timestamps[ntimestamps + i] = t - idle;
   }
+
+  ntimestamps += msgs->n_measurements;
 
   measurements__free_unpacked(msgs, NULL);
 }
@@ -193,6 +130,89 @@ pid_t proc_find(const char* name)
     return -1;
 }
 
+void parseTime(unsigned int seconds, unsigned int *hours, unsigned int *minutes) {
+  *hours = (seconds - (seconds % 3600)) / 3600;
+  *minutes = ((seconds - *hours * 60 * 60) - (seconds % 60)) / 60;
+}
+
+void print_day(time_t start_time, time_t stop_time, unsigned int work) {
+  char date[9];
+  strftime(date, 9, "%Y%m%d", localtime(&start_time));
+
+  char start[9];
+  strftime(start, 9, "%H:%M:%S", localtime(&start_time));
+
+  char stop[9];
+  strftime(stop, 9, "%H:%M:%S", localtime(&stop_time));
+
+  char day[14];
+  strftime(day, 14, "%A", localtime(&start_time));
+
+  char week[3];
+  strftime(week, 3, "%V", localtime(&start_time));
+
+  unsigned int seconds = stop_time - start_time;
+  unsigned int hours;
+  unsigned int minutes;
+  unsigned int work_hours;
+  unsigned int work_minutes;
+
+  parseTime(seconds, &hours, &minutes);
+  parseTime(work, &work_hours, &work_minutes);
+
+  printf("%s %s — %s %2d:%02d (%2d:%02d) w/%2s %s\n", date, start, stop, hours, minutes, work_hours, work_minutes, week, day);
+}
+
+void print_timestamps() {
+  if (ntimestamps == 0) {
+    return;
+  }
+
+  time_t t = (time_t)timestamps[0];
+  time_t start_time = (time_t)timestamps[0];
+  time_t stop_time = (time_t)timestamps[0];
+  unsigned int work = 0;
+
+  char date[9];
+  strftime(date, 9, "%Y%m%d", localtime(&t));
+
+  for (int i = 0; i < ntimestamps; i++) {
+
+    t = (time_t)timestamps[i];
+
+    char current[9];
+    strftime(current, 9, "%Y%m%d", localtime(&t));
+
+    if (strcmp(current, date) != 0) {
+      print_day(start_time, stop_time, work);
+
+      start_time = (time_t)timestamps[i];
+      stop_time = (time_t)timestamps[i];
+      work = 0;
+
+      strcpy(date, current);
+    } else {
+      // Same day
+      stop_time = (time_t)timestamps[i];
+
+      unsigned int fixed = 10 * 60;// 10 minutes
+
+      if (stop_time - start_time < fixed) {
+        work += stop_time - start_time;
+      }
+
+      if (i == ntimestamps - 1) {
+        // Last measurement
+        print_day(start_time, stop_time, work);
+      }
+    }
+  }  
+}
+
+int intcmp (const void * a, const void * b) {
+   return ( *(int*)a - *(int*)b );
+}
+
 int main(int argc, char **argv)
 {
   argp_parse (0, argc, argv, 0, 0, 0);
@@ -249,9 +269,12 @@ int main(int argc, char **argv)
     fclose(fd);
   }
 
-  free(namelist);
+  qsort(timestamps, ntimestamps, sizeof(unsigned int), intcmp);
 
-  print_dates();
+  print_timestamps();
+
+  free(namelist);
+  free(timestamps);
 
   return 0;
 }
