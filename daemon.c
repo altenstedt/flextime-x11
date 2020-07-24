@@ -69,9 +69,6 @@ void flush_measurements() {
 
   time_t now = time(NULL);
 
-  char* zone = localtime(&now)->tm_zone;
-  create_measurements(interval, zone);
-
   char formatTimeBuffer[20];
   strftime(formatTimeBuffer, 20, "%FT%TZ", localtime(&now));
 
@@ -79,6 +76,27 @@ void flush_measurements() {
 
   char fileName[1024];
   snprintf(fileName, 1024, "%s/.flextime/data/%s.bin", home, formatTimeBuffer);
+
+  if(access(fileName, F_OK ) != -1) {
+    // The file already exists.  Since the name of the file is the time in
+    // ISO8601 format resolved to seconds, it means that the data is flushed
+    // already.
+    if (idx == 1) {
+      // This can happen, 1/60 of the times we flush within the same second
+      syslog(LOG_WARNING, "One measurement is discarded for file %s.", fileName);
+    }
+
+    if (idx > 1) {
+      // This can never happen with a measurement interval of one minute
+      syslog(LOG_ERR, "%d measurements are discarded for file %s.", idx, fileName);
+    }
+
+    return;
+  }
+
+  char* zone = localtime(&now)->tm_zone;
+  create_measurements(interval, zone);
+
   FILE *file = fopen(fileName, "w+");
 
   fwrite(parent_buf, parent_len, 1, file);
@@ -160,7 +178,7 @@ void create_measurement_maybe() {
 }
 
 void sighandler(int signum) {
-   syslog(LOG_NOTICE, "Caught signal %d, flushing measurements.\n", signum);
+   syslog(LOG_NOTICE, "Caught signal %d, flushing %d measurements.\n", signum, idx);
 
    flush_measurements();
    idx = 0;
