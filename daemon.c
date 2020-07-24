@@ -184,7 +184,7 @@ void sighandler(int signum) {
    idx = 0;
 
    if (signum != SIGUSR1) {
-     syslog (LOG_NOTICE, "Flextime daemon terminated.");
+     syslog (LOG_NOTICE, "Flextime daemon %s terminated.", PACKAGE_VERSION);
      closelog();
      exit(0);
    }
@@ -251,7 +251,7 @@ int main(int argc, char **argv)
 
   skeleton_daemon();
 
-  syslog (LOG_NOTICE, "Flextime daemon started.");
+  syslog (LOG_NOTICE, "Flextime daemon %s started.", PACKAGE_VERSION);
 
   char topFolderName[1024];
   snprintf(topFolderName, 1024, "%s/.flextime", home);
@@ -282,7 +282,7 @@ int main(int argc, char **argv)
     sleep_with_interrupt(interval);
   }
 
-  syslog (LOG_NOTICE, "Flextime daemon terminated.");
+  syslog (LOG_NOTICE, "Flextime daemon %s terminated.", PACKAGE_VERSION);
   closelog();
 
   return 0;
