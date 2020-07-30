@@ -295,8 +295,8 @@ int main(int argc, char **argv)
     sleep_with_interrupt(interval);
   }
 
-  syslog (LOG_NOTICE, "Flextime daemon %s terminated.", PACKAGE_VERSION);
+  syslog (LOG_NOTICE, "Flextime daemon %s terminated (should never happen in main).", PACKAGE_VERSION);
   closelog();
 
-  return 0;
+  return 1; // We never terminate from main
 }
