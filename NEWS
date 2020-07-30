@@ -1,1 +1,16 @@
-0.14 - Initial version
+# 0.15
+
+The daemon process starts as a proper daemon so that flextimed can be
+easily started as part of your login shell.
+
+https://github.com/pasce/daemon-skeleton-linux-c
+
+The print command renders usable output, including date, week number,
+total time and work time.
+
+Start and stop measurement kinds are written so that we no longer miss
+the first and last minute.
+
+# 0.14
+
+Initial version
