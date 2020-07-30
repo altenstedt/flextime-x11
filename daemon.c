@@ -152,20 +152,10 @@ void sleep_with_interrupt(unsigned int seconds) {
     }
 }
 
-void create_measurement_maybe() {
+void create_measurement(Measurement__Kind kind, unsigned int idle) {
   time_t now = time(NULL);
 
-  long idle = get_idle_time();
-
-  // If the idle time is larger than the interval, we do not create a
-  // measurement since there is nothing to add to the already created
-  // measurements.  The time between measurement is not perfect, so be on
-  // the safe side, we compared to a somewhat larger value.
-  if (idle > interval * 1.5) {
-    return;
-  }
-
-  measurements[idx].kind = MEASUREMENT__KIND__MEASUREMENT;
+  measurements[idx].kind = kind;
   measurements[idx].idle = idle;
   measurements[idx].timestamp = (intmax_t)now;
 
@@ -177,13 +167,33 @@ void create_measurement_maybe() {
   }
 }
 
+void create_measurement_maybe() {
+  long idle = get_idle_time();
+
+  // If the idle time is larger than the interval, we do not create a
+  // measurement since there is nothing to add to the already created
+  // measurements.  The time between measurement is not perfect, so be on
+  // the safe side, we compared to a somewhat larger value.
+  if (idle > interval * 1.5) {
+    return;
+  }
+
+  create_measurement(MEASUREMENT__KIND__MEASUREMENT, idle);
+}
+
 void sighandler(int signum) {
    syslog(LOG_NOTICE, "Caught signal %d, flushing %d measurements.\n", signum, idx);
+
+   int shutdown = signum != SIGUSR1;
+
+   if (shutdown) {
+     create_measurement(MEASUREMENT__KIND__STOP, 0);
+   }
 
    flush_measurements();
    idx = 0;
 
-   if (signum != SIGUSR1) {
+   if (shutdown) {
      syslog (LOG_NOTICE, "Flextime daemon %s terminated.", PACKAGE_VERSION);
      closelog();
      exit(0);
@@ -276,6 +286,9 @@ int main(int argc, char **argv)
   signal(SIGUSR1, sighandler);
   
   initialize_measurements();
+
+  create_measurement(MEASUREMENT__KIND__START, 0);
+  sleep_with_interrupt(interval);
 
   while (1) {
     create_measurement_maybe();
