@@ -269,8 +269,8 @@ int main(int argc, char **argv)
   char dataFolderName[1024];
   snprintf(dataFolderName, 1024, "%s/.flextime/data", home);
 
-  if (0 == mkdir(topFolderName, 0777)) {
-    mkdir(dataFolderName, 0777);
+  if (0 == mkdir(topFolderName, 0750)) {
+    mkdir(dataFolderName, 0750);
     syslog (LOG_NOTICE, "Created folder %s\n", dataFolderName);
   }
 
