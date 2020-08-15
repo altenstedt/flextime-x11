@@ -1,5 +1,5 @@
 Name:           flextime
-Version:        0.15
+Version:        0.16
 Release:        1%{?dist}
 Summary:        Track your working hours
 
@@ -41,5 +41,8 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Sat Aug 15 2020 Martin Altenstedt <Martin.Altenstedt@gmail.com> - 0.16-1
+- Better descriptions in RPM package
+- Flextime version 0.16
 * Fri Aug 14 2020 Martin Altenstedt <Martin.Altenstedt@gmail.com> - 0.15-1
 - Initial version

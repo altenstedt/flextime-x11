@@ -1,3 +1,11 @@
+# 0.16
+
+Add specification file for building an RPM package for Fedora.  The
+build process is updated to make it more robust.
+
+The folder that holds the data that the flextime generates is now
+created with more restricted access rights (0750).
+
 # 0.15
 
 The daemon process starts as a proper daemon so that flextimed can be
