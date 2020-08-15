@@ -5,7 +5,7 @@ Summary:        Track your working hours
 
 License:        GPLv3+
 URL:            https://github.com/altenstedt/flextime-x11/
-Source0:        https://github.com/altenstedt/flextime-x11/archive/%{name}-%{version}.tar.gz
+Source0:        https://github.com/altenstedt/flextime-x11/releases/download/v%{version}/%{name}-%{version}.tar.gz
 
 BuildRequires: automake
 BuildRequires: autoconf

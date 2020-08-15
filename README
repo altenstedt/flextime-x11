@@ -70,6 +70,9 @@ journalctl -r _COMM=flextimed
 git checkout <tag>
 make clean dist
 # upload tgz to Github release
-cp tgz ~/SOURCES/tgz
-rpmbuild
+cp flextime-<version>.tar.gz ~/rpmbuild/SOURCES/
+cp rpmbuild/flextime.spec ~/rpmbuild/SPECS/
+cd ~/rpmbuild/SPECS/
+rpmlint
+rpmbuild -ba flextime.spec
 ```
