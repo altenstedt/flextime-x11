@@ -1,4 +1,26 @@
-This directory holds FLextime, a program for tracking working hours
+# What is this?
+
+This directory holds Flextime, a program for tracking working hours.
+
+The Flextime daemon query X11 for the time since the last user input
+once every minute and stores the result on disk.  The flextime program
+can be used to display the times the user has been active on the
+computer.  For example:
+
+    $ flextime
+    20200810 07:16:50 — 16:10:22  8:53 | 0:27 w/33 Monday
+    20200811 13:29:45 — 14:01:18  0:31 | 0:12 w/33 Tuesday
+    20200812 07:33:21 — 17:22:56  9:49 | 6:22 w/33 Wednesday
+    20200813 07:54:32 — 15:17:12  7:22 | 3:34 w/33 Thursday
+    20200814 07:29:37 — 10:38:36  3:08 | 3:08 w/33 Friday
+
+If your working day starts and ends on the computer, this list
+effectively represents your working hours.
+
+Just make sure that the Flextime daemon, flextimed, is started every
+time you log in.
+
+# Building
 
 `configure` will probe the system for dependencies.  On a Fedora 32
 system, I had to install the following packages:
@@ -17,3 +39,37 @@ dnf provides "*/protobuf-c/protobuf-c.h"
 dnf provides "*/extensions/scrnsaver.h"
 ```
 
+I do not think that there are any runtime dependencies, except for
+X11.  I do not know how this relates to Wayland (I am apparently
+running X11).
+
+# Running the daemon
+
+If you are running a Gnome shell, you can use a desktop file in your
+~/.config/autostart/ folder to start the Flextime daemon every time
+you log in.  For example:
+
+```
+[Desktop Entry]
+Type=Application
+Encoding=UTF-8
+Name=Flextime Daemon
+Exec=flextimed
+Terminal=false
+```
+
+To see logs from the daemon you can use the `journalctl` command:
+
+```
+journalctl -r _COMM=flextimed
+```
+
+# Create a release
+
+```
+git checkout <tag>
+make clean dist
+# upload tgz to Github release
+cp tgz ~/SOURCES/tgz
+rpmbuild
+```
