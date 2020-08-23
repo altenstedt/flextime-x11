@@ -1,5 +1,5 @@
 Name:           flextime
-Version:        0.16
+Version:        0.17
 Release:        1%{?dist}
 Summary:        Track your working hours
 
@@ -41,6 +41,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Sun Aug 23 2020 Martin Altenstedt <Martin.Altenstedt@gmail.com> - 0.17-1
+- Wait for data to flush before printing
+- Flextime version 0.17
 * Sat Aug 15 2020 Martin Altenstedt <Martin.Altenstedt@gmail.com> - 0.16-1
 - Better descriptions in RPM package
 - Flextime version 0.16
