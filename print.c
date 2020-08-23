@@ -11,6 +11,7 @@
 #include <argp.h>
 #include <signal.h>
 #include <time.h>
+#include <fcntl.h>
 
 #include "config.h"
 #include "measurement.pb-c.h"
@@ -317,15 +318,29 @@ int main(int argc, char **argv)
 
   pid_t pid = proc_find("flextimed");
 
-  if (pid >= 0  ) {
+  if (pid >= 0) {
     kill(pid, SIGUSR1);
 
-    struct timespec ts;
-    ts.tv_sec = 0;
-    ts.tv_nsec = 200 * 1000; // nano seconds
+    char pipeFileName[1024];
 
-    // Wait just a little while for the daemon to flush
-    nanosleep(&ts, NULL);
+    snprintf(pipeFileName, 1024, "%s/.flextime/flushed", home);
+
+    int pipe = open(pipeFileName, O_RDONLY); 
+    if (pipe == -1) {
+      printf("Pipe file %s open error %d. Scheduling a small sleep instead.", pipeFileName, errno);
+
+      // Wait just a little while for the daemon to flush
+      struct timespec ts;
+      ts.tv_sec = 1;
+      ts.tv_nsec = 0;
+
+      nanosleep(&ts, NULL);
+    } else {
+      char pipeData[1024];
+      ssize_t result = read(pipe, pipeData, sizeof(pipeData));
+
+      // We just read the data, no need to look at it.
+    }
   }
 
   FILE* fd;

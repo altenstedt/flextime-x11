@@ -9,6 +9,7 @@
 #include <argp.h>
 #include <signal.h>
 #include <syslog.h>
+#include <fcntl.h>
 
 #include "config.h"
 #include "measurement.pb-c.h"
@@ -31,6 +32,8 @@ int idx = 0;
 Measurements parent;
 void *parent_buf;
 unsigned parent_len;
+
+char pipeFileName[1024];
 
 void create_measurements(unsigned int interval, const char* zone) {
   Measurements msgs = MEASUREMENTS__INIT;
@@ -62,8 +65,16 @@ void create_measurements(unsigned int interval, const char* zone) {
   parent = msgs;
 }
 
+void flush_pipe() {
+  // Print a message on the named pipe
+  int pipe = open(pipeFileName, O_WRONLY);
+  write(pipe, "FLUSHED\n", 8);
+  close(pipe);
+}
+
 void flush_measurements() {
   if (idx == 0) {
+    flush_pipe();
     return; // Nothing to flush
   }
 
@@ -102,6 +113,7 @@ void flush_measurements() {
   fwrite(parent_buf, parent_len, 1, file);
 
   fclose(file);
+  flush_pipe();
 }
 
 void initialize_measurements() {
@@ -272,6 +284,16 @@ int main(int argc, char **argv)
   if (0 == mkdir(topFolderName, 0750)) {
     mkdir(dataFolderName, 0750);
     syslog (LOG_NOTICE, "Created folder %s\n", dataFolderName);
+  }
+
+  snprintf(pipeFileName, 1024, "%s/flushed", topFolderName);
+  int pipeFileResult = mkfifo(pipeFileName, S_IRWXU | S_IRGRP);
+
+  if (pipeFileResult != 0) {
+    if (errno != EEXIST) {
+        // Log a warning and keep going
+        syslog(LOG_WARNING, "Error %d when creating pipe %s (continuing).\n", errno, pipeFileName);
+    }
   }
 
   time_t now = time(NULL);
