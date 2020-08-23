@@ -24,7 +24,6 @@ static struct argp argp = { 0, 0, 0, doc };
 #define PARENT_COUNT 15
 
 static unsigned int interval = 60; // seconds, should be called measurement interval
-static unsigned int flushInterval = PARENT_COUNT * 60; // seconds
 
 Measurement measurements[PARENT_COUNT]; // the number of measurements within a flush
 int idx = 0;
@@ -78,10 +77,11 @@ void flush_measurements() {
     return; // Nothing to flush
   }
 
-  time_t now = time(NULL);
+  const time_t now = time(NULL);
+  const struct tm *local_now = localtime(&now);
 
   char formatTimeBuffer[20];
-  strftime(formatTimeBuffer, 20, "%FT%TZ", localtime(&now));
+  strftime(formatTimeBuffer, 20, "%FT%TZ", local_now);
 
   char* home = getenv("HOME");
 
@@ -105,7 +105,7 @@ void flush_measurements() {
     return;
   }
 
-  char* zone = localtime(&now)->tm_zone;
+  const char* zone = local_now->tm_zone;
   create_measurements(interval, zone);
 
   FILE *file = fopen(fileName, "w+");
@@ -286,7 +286,7 @@ int main(int argc, char **argv)
     syslog (LOG_NOTICE, "Created folder %s\n", dataFolderName);
   }
 
-  snprintf(pipeFileName, 1024, "%s/flushed", topFolderName);
+  snprintf(pipeFileName, 1024 + 8, "%s/flushed", topFolderName);
   int pipeFileResult = mkfifo(pipeFileName, S_IRWXU | S_IRGRP);
 
   if (pipeFileResult != 0) {
@@ -295,9 +295,6 @@ int main(int argc, char **argv)
         syslog(LOG_WARNING, "Error %d when creating pipe %s (continuing).\n", errno, pipeFileName);
     }
   }
-
-  time_t now = time(NULL);
-  char* zone = localtime(&now)->tm_zone;
 
   signal(SIGINT, sighandler);
   signal(SIGHUP, sighandler);

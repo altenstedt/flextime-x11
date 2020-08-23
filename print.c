@@ -337,14 +337,13 @@ int main(int argc, char **argv)
       nanosleep(&ts, NULL);
     } else {
       char pipeData[1024];
-      ssize_t result = read(pipe, pipeData, sizeof(pipeData));
+      read(pipe, pipeData, sizeof(pipeData));
 
       // We just read the data, no need to look at it.
     }
   }
 
   FILE* fd;
-  struct dirent* file;
 
   char path[MAX_PATH];
 
