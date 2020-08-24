@@ -32,7 +32,7 @@ Measurements parent;
 void *parent_buf;
 unsigned parent_len;
 
-char pipeFileName[1024];
+char pipeFileName[1032];
 
 void create_measurements(unsigned int interval, const char* zone) {
   Measurements msgs = MEASUREMENTS__INIT;
@@ -286,7 +286,7 @@ int main(int argc, char **argv)
     syslog (LOG_NOTICE, "Created folder %s\n", dataFolderName);
   }
 
-  snprintf(pipeFileName, 1024 + 8, "%s/flushed", topFolderName);
+  snprintf(pipeFileName, 1032, "%s/flushed", topFolderName);
   int pipeFileResult = mkfifo(pipeFileName, S_IRWXU | S_IRGRP);
 
   if (pipeFileResult != 0) {
