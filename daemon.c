@@ -40,7 +40,7 @@ void create_measurements(unsigned int interval, const char* zone) {
   msgs.interval = interval;
 
   size_t size = strlen(zone);
-  msgs.zone = malloc(sizeof(char) * size);
+  msgs.zone = malloc(sizeof(char) * size + 1);
 
   strcpy(msgs.zone, zone);
   

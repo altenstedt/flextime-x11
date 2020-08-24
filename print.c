@@ -340,6 +340,7 @@ int main(int argc, char **argv)
       read(pipe, pipeData, sizeof(pipeData));
 
       // We just read the data, no need to look at it.
+      close(pipe);
     }
   }
 
