@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT(flextime, 0.17.1, martin.altenstedt@gmail.com)
+AC_INIT(flextime, 0.17.2, martin.altenstedt@gmail.com)
 AM_INIT_AUTOMAKE([-Wall -Werror])
 AC_CONFIG_SRCDIR([daemon.c])
 AC_CONFIG_HEADERS([config.h])

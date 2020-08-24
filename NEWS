@@ -1,3 +1,7 @@
+# 0.17.2
+
+Fix potential buffer overflow
+
 # 0.17.1
 
 Fix build warnings
