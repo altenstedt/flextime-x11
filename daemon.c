@@ -194,7 +194,18 @@ void create_measurement_maybe() {
 }
 
 void sighandler(int signum) {
-   syslog(LOG_NOTICE, "Caught signal %d, flushing %d measurements.\n", signum, idx);
+  // In general, our approach to flushing data in a signal handler is
+  // wrong.  If the main program is in the process of writing data to
+  // files, then since the signal handler is also writing to files, the
+  // state of the allocated data buffers are simply wrong.
+  // 
+  // We need to fix that, and avoid using stdio functions from the signal
+  // handler.  In fact, only functions listed in signal-safety(7) can be
+  // used in a signal handler.
+  // 
+  // https://stackoverflow.com/a/55179208
+  // https://man7.org/linux/man-pages/man7/signal-safety.7.html
+
 
    int shutdown = signum != SIGUSR1;
 
@@ -208,7 +219,7 @@ void sighandler(int signum) {
    if (shutdown) {
      syslog (LOG_NOTICE, "Flextime daemon %s terminated.", PACKAGE_VERSION);
      closelog();
-     exit(0);
+     _exit(0);
    }
 }
 
