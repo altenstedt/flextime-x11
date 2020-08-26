@@ -71,9 +71,9 @@ void flush_pipe() {
   close(pipe);
 }
 
-void flush_measurements() {
+void flush_measurements(int pipe) {
   if (idx == 0) {
-    flush_pipe();
+    if (pipe) flush_pipe();
     return; // Nothing to flush
   }
 
@@ -113,7 +113,7 @@ void flush_measurements() {
   fwrite(parent_buf, parent_len, 1, file);
 
   fclose(file);
-  flush_pipe();
+  if (pipe) flush_pipe();
 }
 
 void initialize_measurements() {
@@ -174,7 +174,7 @@ void create_measurement(Measurement__Kind kind, unsigned int idle) {
   idx++;
 
   if (idx == PARENT_COUNT) {
-    flush_measurements();
+    flush_measurements(0);
     idx = 0;
   }
 }
@@ -213,7 +213,11 @@ void sighandler(int signum) {
      create_measurement(MEASUREMENT__KIND__STOP, 0);
    }
 
-   flush_measurements();
+   if (shutdown) 
+    flush_measurements(0);
+  else
+    flush_measurements(1);
+
    idx = 0;
 
    if (shutdown) {
