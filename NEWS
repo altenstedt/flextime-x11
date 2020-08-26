@@ -1,3 +1,7 @@
+# 0.17.3
+
+Fix a set of issues where the daemon would hang and stop working.
+
 # 0.17.2
 
 Fix potential buffer overflow
