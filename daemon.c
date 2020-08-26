@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -14,15 +15,10 @@
 #include "config.h"
 #include "measurement.pb-c.h"
 
-const char *argp_program_version = PACKAGE_STRING;
-const char *argp_program_bug_address = PACKAGE_BUGREPORT;
-
-static char doc[] = "Flextime -- tracking working hours";
-
-static struct argp argp = { 0, 0, 0, doc };
-
 #define PARENT_COUNT 15
 
+static unsigned int foreground = 0;
+static unsigned int verbose = 0;
 static unsigned int interval = 60; // seconds, should be called measurement interval
 
 Measurement measurements[PARENT_COUNT]; // the number of measurements within a flush
@@ -64,7 +60,23 @@ void create_measurements(unsigned int interval, const char* zone) {
   parent = msgs;
 }
 
+void internal_log(int pri, const char *fmt, ...) {
+    va_list vl;
+    va_start(vl, fmt);
+    if (foreground) {
+      vprintf(fmt, vl);
+      printf("\n");
+      fflush(stdout);
+    } else {
+      vsyslog(pri, fmt, vl);
+    }
+
+    va_end(vl);
+}
+
 void flush_pipe() {
+  if (verbose) internal_log(LOG_DEBUG, "Writing message to pipe.");
+
   // Print a message on the named pipe
   int pipe = open(pipeFileName, O_RDWR); // Not O_WRONLY or we will hang if no reader
   write(pipe, "FLUSHED\n", 8);
@@ -74,8 +86,13 @@ void flush_pipe() {
 void flush_measurements(int pipe) {
   if (idx == 0) {
     if (pipe) flush_pipe();
+
+    if (verbose) internal_log(LOG_DEBUG, "No measurements to flush.");
+
     return; // Nothing to flush
   }
+
+  if (verbose) internal_log(LOG_DEBUG, "Flushing measurements at index %d.", idx);
 
   const time_t now = time(NULL);
   const struct tm *local_now = localtime(&now);
@@ -94,12 +111,17 @@ void flush_measurements(int pipe) {
     // already.
     if (idx == 1) {
       // This can happen, 1/60 of the times we flush within the same second
-      syslog(LOG_WARNING, "One measurement is discarded for file %s.", fileName);
+      internal_log(LOG_WARNING, "One measurement is discarded for file %s.", fileName);
     }
 
     if (idx > 1) {
       // This can never happen with a measurement interval of one minute
-      syslog(LOG_ERR, "%d measurements are discarded for file %s.", idx, fileName);
+      internal_log(LOG_ERR, "%d measurements are discarded for file %s.", idx, fileName);
+    }
+
+    if (idx == 0) {
+      // This should never happen
+      internal_log(LOG_WARNING, "Zero measurements are discarded for file %s.", fileName);
     }
 
     return;
@@ -114,6 +136,8 @@ void flush_measurements(int pipe) {
 
   fclose(file);
   if (pipe) flush_pipe();
+
+  if (verbose) internal_log(LOG_DEBUG, "Flushed measurements to file %s.", fileName);
 }
 
 void initialize_measurements() {
@@ -173,6 +197,8 @@ void create_measurement(Measurement__Kind kind, unsigned int idle) {
 
   idx++;
 
+  if (verbose) internal_log(LOG_DEBUG, "Created measurement; index now at %d (of %d).", idx, PARENT_COUNT);
+
   if (idx == PARENT_COUNT) {
     flush_measurements(0);
     idx = 0;
@@ -187,6 +213,8 @@ void create_measurement_maybe() {
   // measurements.  The time between measurement is not perfect, so be on
   // the safe side, we compared to a somewhat larger value.
   if (idle > interval * 1.5) {
+    if (verbose) internal_log(LOG_DEBUG, "Did not create measurement since idle is too large (%d compared to %f).", idle, interval * 1.5);
+
     return;
   }
 
@@ -206,10 +234,12 @@ void sighandler(int signum) {
   // https://stackoverflow.com/a/55179208
   // https://man7.org/linux/man-pages/man7/signal-safety.7.html
 
+   internal_log(LOG_NOTICE, "Caught signal %d, flushing %d measurements.", signum, idx);
 
    int shutdown = signum != SIGUSR1;
 
    if (shutdown) {
+    if (verbose) internal_log(LOG_DEBUG, "Shutdown measurement created.");
      create_measurement(MEASUREMENT__KIND__STOP, 0);
    }
 
@@ -221,8 +251,10 @@ void sighandler(int signum) {
    idx = 0;
 
    if (shutdown) {
-     syslog (LOG_NOTICE, "Flextime daemon %s terminated.", PACKAGE_VERSION);
      closelog();
+
+     internal_log (LOG_NOTICE, "Flextime daemon %s terminated.", PACKAGE_VERSION);
+
      _exit(0);
    }
 }
@@ -230,6 +262,8 @@ void sighandler(int signum) {
 // https://github.com/pasce/daemon-skeleton-linux-c
 static void skeleton_daemon()
 {
+    if (verbose) internal_log(LOG_DEBUG, "Forking a daemon process.");
+    
     pid_t pid;
     
     /* Fork off the parent process */
@@ -281,14 +315,94 @@ static void skeleton_daemon()
     openlog ("flextime", LOG_PID, LOG_DAEMON);
 }
 
+const char *argp_program_version = PACKAGE_STRING;
+const char *argp_program_bug_address = PACKAGE_BUGREPORT;
+
+static char doc[] = "Flextime -- tracking working hours";
+
+/* A description of the arguments we accept. */
+static char args_doc[] = "ARG1 ARG2";
+
+/* The options we understand. */
+static struct argp_option options[] = {
+  {"foreground", 'f', 0, 0,  "Run in the foreground, not as a daemon" },
+  {"verbose", 'v', 0, 0,  "Print verbose output" },
+  { 0 }
+};
+
+/* Used by main to communicate with parse_opt. */
+struct arguments
+{
+  char *args[2];                /* arg1 & arg2 */
+  int foreground;
+  int verbose;
+};
+
+/* Parse a single option. */
+static error_t
+parse_opt (int key, char *arg, struct argp_state *state)
+{
+  /* Get the input argument from argp_parse, which we
+     know is a pointer to our arguments structure. */
+  struct arguments *arguments = state->input;
+
+  switch (key)
+    {
+    case 'f': 
+      arguments->foreground = 1;
+      break;
+
+    case 'v': 
+      arguments->verbose = 1;
+      break;
+
+    case ARGP_KEY_ARG:
+      if (state->arg_num >= 2)
+        /* Too many arguments. */
+        argp_usage (state);
+
+      arguments->args[state->arg_num] = arg;
+
+      break;
+
+    case ARGP_KEY_END:
+      if (state->arg_num < 0)
+        /* Not enough arguments. */
+        argp_usage (state);
+      break;
+
+    default:
+      return ARGP_ERR_UNKNOWN;
+    }
+  return 0;
+}
+
+/* Our argp parser. */
+static struct argp argp = { options, parse_opt, args_doc, doc };
+
 int main(int argc, char **argv)
 {
-  argp_parse (0, argc, argv, 0, 0, 0);
+  struct arguments arguments;
+
+  /* Default values. */
+  arguments.foreground = 0;
+  arguments.verbose = 0;
+
+  /* Parse our arguments; every option seen by parse_opt will
+     be reflected in arguments. */
+  argp_parse (&argp, argc, argv, 0, 0, &arguments);
+
+  foreground = arguments.foreground;
+  verbose = arguments.verbose;
+
   char* home = getenv("HOME");
 
-  skeleton_daemon();
-
-  syslog (LOG_NOTICE, "Flextime daemon %s started.", PACKAGE_VERSION);
+  if (!foreground) {
+    skeleton_daemon();
+    internal_log(LOG_NOTICE, "Flextime daemon %s started.", PACKAGE_VERSION);
+  } else {
+    if (verbose) internal_log(LOG_DEBUG, "Running in the foreground.");
+  }
 
   char topFolderName[1024];
   snprintf(topFolderName, 1024, "%s/.flextime", home);
@@ -298,7 +412,7 @@ int main(int argc, char **argv)
 
   if (0 == mkdir(topFolderName, 0750)) {
     mkdir(dataFolderName, 0750);
-    syslog (LOG_NOTICE, "Created folder %s\n", dataFolderName);
+    internal_log(LOG_NOTICE, "Created folder %s.", dataFolderName);
   }
 
   snprintf(pipeFileName, 1032, "%s/flushed", topFolderName);
@@ -307,7 +421,7 @@ int main(int argc, char **argv)
   if (pipeFileResult != 0) {
     if (errno != EEXIST) {
         // Log a warning and keep going
-        syslog(LOG_WARNING, "Error %d when creating pipe %s (continuing).\n", errno, pipeFileName);
+        internal_log(LOG_WARNING, "Error %d when creating pipe %s (continuing).", errno, pipeFileName);
     }
   }
 
@@ -329,8 +443,10 @@ int main(int argc, char **argv)
     sleep_with_interrupt(interval);
   }
 
-  syslog (LOG_NOTICE, "Flextime daemon %s terminated (should never happen in main).", PACKAGE_VERSION);
-  closelog();
+  if (!foreground) {
+    internal_log(LOG_NOTICE, "Flextime daemon %s terminated (should never happen in main).", PACKAGE_VERSION);
+    closelog();
+  }
 
   return 1; // We never terminate from main
 }
