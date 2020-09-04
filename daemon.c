@@ -260,6 +260,9 @@ void sighandler(int signum) {
 }
 
 // https://github.com/pasce/daemon-skeleton-linux-c
+//
+// This might all be wrong-headed, and we should not do it at all:
+// https://unix.stackexchange.com/a/177361
 static void skeleton_daemon()
 {
     if (verbose) internal_log(LOG_DEBUG, "Forking a daemon process.");
