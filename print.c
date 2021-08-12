@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE 500 // For getdate(3)
+#define _DEFAULT_SOURCE // for scandir(3)
 #include <time.h>
 #include <stdio.h>
 #include <string.h>
@@ -236,6 +238,7 @@ static char args_doc[] = "ARG1 ARG2";
 static struct argp_option options[] = {
   {"split-week", 'w', 0, 0,  "Split weeks" },
   {"idle", 'i', "minutes", 0, "Idle limit in minutes, default to 10" },
+  {"stop", 's', "date", 0, "Mark STOP getdate(3)" },
   { 0 }
 };
 
@@ -245,6 +248,7 @@ struct arguments
   char *args[2];                /* arg1 & arg2 */
   int splitWeeks;
   unsigned int idle;
+  char *stop;
 };
 
 /* Parse a single option. */
@@ -262,6 +266,9 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
     case 'i':
       arguments->idle = atoi(arg);
+      break;
+    case 's':
+      arguments->stop = arg;
       break;
 
     case ARGP_KEY_ARG:
@@ -295,6 +302,7 @@ int main(int argc, char **argv)
   /* Default values. */
   arguments.splitWeeks = 0;
   arguments.idle = 10;
+  arguments.stop = NULL;
 
   /* Parse our arguments; every option seen by parse_opt will
      be reflected in arguments. */
@@ -368,6 +376,37 @@ int main(int argc, char **argv)
     read_file(fd);
 
     fclose(fd);
+  }
+
+  if (arguments.stop != NULL) {
+    struct tm *tm_struct;
+    tm_struct = getdate(arguments.stop);
+
+    if (getdate_err != 0) {
+      switch(getdate_err) {
+      case 1:
+	fprintf(stderr, "Unable to use stop date since the DATEMSK environment variable is not defined, or its value is an empty string.\n");
+	break;
+      case 2:
+	fprintf(stderr, "The template file specified by DATEMSK cannot be opened for reading.\n");
+	break;
+      case 7:
+	fprintf(stderr, "Unable to parse stop date %s since it is not supported by DATEMSK.\n", arguments.stop);
+	break;
+      case 8:
+	fprintf(stderr, "Unable to parse stop date %s.\n", arguments.stop);
+	break;
+      default:
+	fprintf(stderr, "Unable to parse stop date %s (%d)\n", arguments.stop, getdate_err);
+	break;
+      }
+
+      exit(2);
+    } else {
+      ntimestamps++;
+      timestamps = realloc(timestamps, ntimestamps * sizeof(unsigned int));
+      timestamps[ntimestamps - 1] = mktime(tm_struct);
+    }
   }
 
   qsort(timestamps, ntimestamps, sizeof(unsigned int), intcmp);
