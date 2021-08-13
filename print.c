@@ -41,8 +41,13 @@ read_buffer (unsigned max_length, uint8_t *out, FILE* file)
   return cur_len;
 }
 
-static unsigned int *timestamps = NULL;
+static struct timestamp *timestamps = NULL;
 static unsigned int ntimestamps = 0;
+
+struct timestamp {
+  unsigned int kind;
+  unsigned int time;
+};
 
 void read_file(FILE* file) {
   Measurements *msgs;
@@ -57,7 +62,7 @@ void read_file(FILE* file) {
     exit(1);
   }
 
-  timestamps = realloc(timestamps, (ntimestamps + msgs->n_measurements) * sizeof(unsigned int));
+  timestamps = realloc(timestamps, (ntimestamps + msgs->n_measurements) * sizeof(struct timestamp));
 
   for (int i = 0; i < msgs->n_measurements; i++) {
     Measurement msg = *msgs->measurements[i];
@@ -65,7 +70,8 @@ void read_file(FILE* file) {
     time_t t = (time_t)msg.timestamp;
     unsigned int idle = msg.idle;
 
-    timestamps[ntimestamps + i] = t - idle;
+    timestamps[ntimestamps + i].time = t - idle;
+    timestamps[ntimestamps + i].kind = msg.kind;
   }
 
   ntimestamps += msgs->n_measurements;
@@ -167,10 +173,11 @@ void print_timestamps() {
     return;
   }
 
-  time_t t = (time_t)timestamps[0];
-  time_t start_time = (time_t)timestamps[0];
-  time_t stop_time = (time_t)timestamps[0];
+  time_t t = (time_t)timestamps[0].time;
+  time_t start_time = (time_t)(timestamps[0].time);
+  time_t stop_time = (time_t)(timestamps[0].time);
   unsigned int work = 0;
+  unsigned int skip_day = 0;
 
   char date[9];
   strftime(date, 9, "%Y%m%d", localtime(&t));
@@ -179,7 +186,7 @@ void print_timestamps() {
   strftime(week, 3, "%V", localtime(&t));
 
   for (int i = 0; i < ntimestamps; i++) {
-    t = (time_t)timestamps[i];
+    t = (time_t)(timestamps[i].time);
 
     char current[9];
     strftime(current, 9, "%Y%m%d", localtime(&t));
@@ -188,6 +195,7 @@ void print_timestamps() {
     strftime(current_week, 3, "%V", localtime(&t));
 
     if (strcmp(current, date) != 0) {
+      skip_day = 0;
       print_day(start_time, stop_time, work);
 
       if (strcmp(current_week, week) != 0) {
@@ -198,21 +206,37 @@ void print_timestamps() {
         strcpy(week, current_week);
       }
 
-      start_time = (time_t)timestamps[i];
-      stop_time = (time_t)timestamps[i];
+      start_time = (time_t)(timestamps[i].time);
+      stop_time = (time_t)(timestamps[i].time);
       work = 0;
 
       strcpy(date, current);
     } else {
       // Same day
-      stop_time = (time_t)timestamps[i];
+
+      if (skip_day) {
+
+	if (i == ntimestamps - 1) {
+	  // Last measurement AND the last day is a skip
+	  print_day(start_time, stop_time, work);
+	}
+
+	continue;
+      }
+
+      stop_time = (time_t)(timestamps[i].time);
 
       if (i > 0) {
-        time_t previous_stop_time = (time_t)timestamps[i - 1];
+        time_t previous_stop_time = (time_t)(timestamps[i - 1].time);
 
         if (stop_time - previous_stop_time < fixed) {
           work += stop_time - previous_stop_time;
         }
+      }
+
+      if (timestamps[i - 1].kind == 3) {
+        // STOP measurement
+	skip_day = 1;
       }
 
       if (i == ntimestamps - 1) {
@@ -220,11 +244,11 @@ void print_timestamps() {
         print_day(start_time, stop_time, work);
       }
     }
-  }  
+  }
 }
 
 int intcmp (const void * a, const void * b) {
-   return ( *(int*)a - *(int*)b );
+  return ( ((struct timestamp*)a)->time - ((struct timestamp*)b)->time );
 }
 const char *argp_program_version = PACKAGE_STRING;
 const char *argp_program_bug_address = PACKAGE_BUGREPORT;
@@ -404,12 +428,13 @@ int main(int argc, char **argv)
       exit(2);
     } else {
       ntimestamps++;
-      timestamps = realloc(timestamps, ntimestamps * sizeof(unsigned int));
-      timestamps[ntimestamps - 1] = mktime(tm_struct);
+      timestamps = realloc(timestamps, ntimestamps * sizeof(struct timestamp));
+      timestamps[ntimestamps - 1].time = mktime(tm_struct);
+      timestamps[ntimestamps - 1].kind = 3; // STOP
     }
   }
 
-  qsort(timestamps, ntimestamps, sizeof(unsigned int), intcmp);
+  qsort(timestamps, ntimestamps, sizeof(struct timestamp), intcmp);
 
   print_timestamps();
 
