@@ -76,3 +76,10 @@ cd ~/rpmbuild/SPECS/
 rpmlint
 rpmbuild -ba flextime.spec
 ```
+
+# Testing
+
+```
+$ ./flextime --no-local-data --stop "17:00" --mark "07:00;18:00"
+20210826 07:00:00 — 17:00:00 10:00 | 0:00 w/NN Weekday
+```

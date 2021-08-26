@@ -21,8 +21,18 @@
 #define MAX_MSG_SIZE 1024
 #define MAX_PATH 4096 // https://stackoverflow.com/a/9449307
 
+// There will be measurements of kind MEASUREMENT__KIND__STOP in the data
+// for any given day, typically.  The intended usage for the --stop
+// argument at the command line is to set a hard stop marker so that you
+// can answer the question "what if I stopped working at that time?".
+// For this we need a new kind of measurment.  The value must be unique,
+// so we choose a large value.  At the time of this writing, existing
+// measurment kind values are 0-3 (see protobuf definition.)
+#define MEASUREMENT__KIND__ARG_STOP 999 // Stop measurement from the command line
+
 static unsigned int fixed = 60 * 10;
 static int splitWeeks = 0;
+static int read_local_data = 1;
 
 static size_t
 read_buffer (unsigned max_length, uint8_t *out, FILE* file)
@@ -55,7 +65,7 @@ void read_file(FILE* file) {
   uint8_t buf[MAX_MSG_SIZE];
   size_t msg_len = read_buffer(MAX_MSG_SIZE, buf, file);
 
-  msgs = measurements__unpack(NULL, msg_len, buf);	
+  msgs = measurements__unpack(NULL, msg_len, buf);
   if (msgs == NULL)
   {
     fprintf(stderr, "error unpacking incoming message\n");
@@ -213,15 +223,13 @@ void print_timestamps() {
       strcpy(date, current);
     } else {
       // Same day
-
       if (skip_day) {
+        if (i == ntimestamps - 1) {
+          // Last measurement AND the last day is a skip
+          print_day(start_time, stop_time, work);
+        }
 
-	if (i == ntimestamps - 1) {
-	  // Last measurement AND the last day is a skip
-	  print_day(start_time, stop_time, work);
-	}
-
-	continue;
+        continue;
       }
 
       stop_time = (time_t)(timestamps[i].time);
@@ -234,9 +242,8 @@ void print_timestamps() {
         }
       }
 
-      if (timestamps[i - 1].kind == 3) {
-        // STOP measurement
-	skip_day = 1;
+      if (timestamps[i].kind == MEASUREMENT__KIND__ARG_STOP) {
+        skip_day = 1;
       }
 
       if (i == ntimestamps - 1) {
@@ -250,6 +257,46 @@ void print_timestamps() {
 int intcmp (const void * a, const void * b) {
   return ( ((struct timestamp*)a)->time - ((struct timestamp*)b)->time );
 }
+
+void parse_mark_arg(char* mark, int kind) {
+  if (mark == NULL) {
+    return;
+  }
+
+    char *token;
+    while ((token = strsep(&mark, ";"))) {
+      struct tm *tm_struct;
+      tm_struct = getdate(token);
+
+      if (getdate_err != 0) {
+        switch(getdate_err) {
+        case 1:
+          fprintf(stderr, "Unable to use date since the DATEMSK environment variable is not defined, or its value is an empty string.\n");
+          break;
+        case 2:
+          fprintf(stderr, "The template file specified by DATEMSK cannot be opened for reading.\n");
+          break;
+        case 7:
+          fprintf(stderr, "Unable to parse date %s since it is not supported by DATEMSK.\n", mark);
+          break;
+        case 8:
+          fprintf(stderr, "Unable to parse date %s.\n", mark);
+          break;
+        default:
+          fprintf(stderr, "Unable to parse date %s (%d)\n", mark, getdate_err);
+          break;
+        }
+
+        exit(2);
+      } else {
+        ntimestamps++;
+        timestamps = realloc(timestamps, ntimestamps * sizeof(struct timestamp));
+        timestamps[ntimestamps - 1].time = mktime(tm_struct);
+        timestamps[ntimestamps - 1].kind = kind;
+      }
+    }
+}
+
 const char *argp_program_version = PACKAGE_STRING;
 const char *argp_program_bug_address = PACKAGE_BUGREPORT;
 
@@ -258,11 +305,15 @@ static char doc[] = "Flextime -- tracking working hours";
 /* A description of the arguments we accept. */
 static char args_doc[] = "ARG1 ARG2";
 
+#define OPT_NO_LOCAL_DATA 1 // --no-local-data
+
 /* The options we understand. */
 static struct argp_option options[] = {
   {"split-week", 'w', 0, 0,  "Split weeks" },
   {"idle", 'i', "minutes", 0, "Idle limit in minutes, default to 10" },
   {"stop", 's', "date", 0, "Mark STOP getdate(3)" },
+  {"mark", 'm', "date", 0, "Mark MEASUREMENT getdate(3)" },
+  {"no-local-data", OPT_NO_LOCAL_DATA, 0, 0, "Do not read data from local files" },
   { 0 }
 };
 
@@ -273,6 +324,8 @@ struct arguments
   int splitWeeks;
   unsigned int idle;
   char *stop;
+  char *mark;
+  int no_local_data;
 };
 
 /* Parse a single option. */
@@ -293,6 +346,12 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
     case 's':
       arguments->stop = arg;
+      break;
+    case 'm':
+      arguments->mark = arg;
+      break;
+    case OPT_NO_LOCAL_DATA:
+      arguments->no_local_data = 1;
       break;
 
     case ARGP_KEY_ARG:
@@ -327,6 +386,8 @@ int main(int argc, char **argv)
   arguments.splitWeeks = 0;
   arguments.idle = 10;
   arguments.stop = NULL;
+  arguments.mark = NULL;
+  arguments.no_local_data = 0;
 
   /* Parse our arguments; every option seen by parse_opt will
      be reflected in arguments. */
@@ -334,6 +395,7 @@ int main(int argc, char **argv)
 
   fixed = arguments.idle * 60;
   splitWeeks = arguments.splitWeeks;
+  read_local_data = !arguments.no_local_data;
 
   char* home = getenv("HOME");
 
@@ -376,70 +438,45 @@ int main(int argc, char **argv)
     }
   }
 
-  FILE* fd;
-
-  char path[MAX_PATH];
-
   struct dirent **namelist;
-  int n = scandir(dataFolderName, &namelist, 0, alphasort);
-  if (n < 0) {
-    perror("scandir");
-  }
+  if (read_local_data) {
+    FILE* fd;
 
-  while(n--) {
-    char *dot = strrchr(namelist[n]->d_name, '.');
+    char path[MAX_PATH];
 
-    if (dot == NULL || strcmp(dot, ".bin")) {
-      continue;
+    int n = scandir(dataFolderName, &namelist, 0, alphasort);
+    if (n < 0) {
+      perror("scandir");
     }
 
-    snprintf(path, MAX_PATH, "%s/%s", dataFolderName, namelist[n]->d_name);
+    while(n--) {
+      char *dot = strrchr(namelist[n]->d_name, '.');
 
-    fd = fopen(path, "r");
-
-    read_file(fd);
-
-    fclose(fd);
-  }
-
-  if (arguments.stop != NULL) {
-    struct tm *tm_struct;
-    tm_struct = getdate(arguments.stop);
-
-    if (getdate_err != 0) {
-      switch(getdate_err) {
-      case 1:
-	fprintf(stderr, "Unable to use stop date since the DATEMSK environment variable is not defined, or its value is an empty string.\n");
-	break;
-      case 2:
-	fprintf(stderr, "The template file specified by DATEMSK cannot be opened for reading.\n");
-	break;
-      case 7:
-	fprintf(stderr, "Unable to parse stop date %s since it is not supported by DATEMSK.\n", arguments.stop);
-	break;
-      case 8:
-	fprintf(stderr, "Unable to parse stop date %s.\n", arguments.stop);
-	break;
-      default:
-	fprintf(stderr, "Unable to parse stop date %s (%d)\n", arguments.stop, getdate_err);
-	break;
+      if (dot == NULL || strcmp(dot, ".bin")) {
+        continue;
       }
 
-      exit(2);
-    } else {
-      ntimestamps++;
-      timestamps = realloc(timestamps, ntimestamps * sizeof(struct timestamp));
-      timestamps[ntimestamps - 1].time = mktime(tm_struct);
-      timestamps[ntimestamps - 1].kind = 3; // STOP
+      snprintf(path, MAX_PATH, "%s/%s", dataFolderName, namelist[n]->d_name);
+
+      fd = fopen(path, "r");
+
+      read_file(fd);
+
+      fclose(fd);
     }
   }
 
-  qsort(timestamps, ntimestamps, sizeof(struct timestamp), intcmp);
+  parse_mark_arg(arguments.stop, MEASUREMENT__KIND__ARG_STOP);
+  parse_mark_arg(arguments.mark, MEASUREMENT__KIND__MEASUREMENT);
 
-  print_timestamps();
+  if (ntimestamps > 0){
+    qsort(timestamps, ntimestamps, sizeof(struct timestamp), intcmp);
 
-  free(namelist);
-  free(timestamps);
+    print_timestamps();
+  }
+
+  if (read_local_data) free(namelist);
+  if (ntimestamps > 0) free(timestamps);
 
   return 0;
 }
