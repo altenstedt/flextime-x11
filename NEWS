@@ -1,3 +1,9 @@
+# 0.18.0
+
+Add options --stop and --mark to add measurements from the command
+line.  This is useful for answering questions like "what if a stopped
+(or started) working at a specific time?"
+
 # 0.17.3
 
 Fix a set of issues where the daemon would hang and stop working.
