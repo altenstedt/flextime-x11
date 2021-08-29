@@ -7,7 +7,8 @@ flextime_SOURCES = measurement.pb-c.h measurement.pb-c.c print.c
 # https://stackoverflow.com/a/18328947
 BUILT_SOURCES = measurement.pb-c.c measurement.pb-c.h
 MOSTLYCLEANFILES = measurement.pb-c.c measurement.pb-c.h
-dist_noinst_DATA = measurement.proto
+dist_noinst_DATA = measurement.proto flextime.1 flextimed.1
+man_MANS = flextime.1 flextimed.1
 
 measurement.pb-c.c measurement.pb-c.h: measurement.proto
 	protoc-c --c_out=. $<
