@@ -36,6 +36,8 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %{_bindir}/flextime
 %{_bindir}/flextimed
+%{_mandir}/flextime.1
+%{_mandir}/flextimed.1
 %license COPYING
 %doc AUTHORS ChangeLog NEWS README
 
