@@ -79,7 +79,12 @@ void flush_pipe() {
 
   // Print a message on the named pipe
   int pipe = open(pipeFileName, O_RDWR); // Not O_WRONLY or we will hang if no reader
-  write(pipe, "FLUSHED\n", 8);
+  ssize_t size = write(pipe, "FLUSHED\n", 8);
+
+  if (size != -8) {
+    internal_log(LOG_ERR, "Unexpected write size %ld.\n", size);
+  }
+
   close(pipe);
 }
 
@@ -305,7 +310,11 @@ static void skeleton_daemon()
     
     /* Change the working directory to the root directory */
     /* or another appropriated directory */
-    chdir("/");
+    int result = chdir("/");
+
+    if (result != 0) {
+      internal_log(LOG_ERR, "Unable to change to root directory (%d).", result);
+    }
     
     /* Close all open file descriptors */
     int x;

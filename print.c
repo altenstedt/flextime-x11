@@ -431,7 +431,11 @@ int main(int argc, char **argv)
       nanosleep(&ts, NULL);
     } else {
       char pipeData[1024];
-      read(pipe, pipeData, sizeof(pipeData));
+      ssize_t size = read(pipe, pipeData, sizeof(pipeData));
+
+      if (size == sizeof(pipeData)) {
+        printf("Unexpected pipe write size %ld.\n", size);
+      }
 
       // We just read the data, no need to look at it.
       close(pipe);
