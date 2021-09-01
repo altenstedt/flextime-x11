@@ -81,7 +81,7 @@ void flush_pipe() {
   int pipe = open(pipeFileName, O_RDWR); // Not O_WRONLY or we will hang if no reader
   ssize_t size = write(pipe, "FLUSHED\n", 8);
 
-  if (size != -8) {
+  if (size != 8) {
     internal_log(LOG_ERR, "Unexpected write size %ld.\n", size);
   }
 
