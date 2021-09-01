@@ -1,3 +1,7 @@
+# 0.18.2
+
+Close pipe between daemon and print process.
+
 # 0.18.1
 
 Add man pages.
