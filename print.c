@@ -59,7 +59,7 @@ struct timestamp {
   unsigned int time;
 };
 
-void read_file(FILE* file) {
+void read_file(FILE* file, char *fileName) {
   Measurements *msgs;
 
   uint8_t buf[MAX_MSG_SIZE];
@@ -68,8 +68,8 @@ void read_file(FILE* file) {
   msgs = measurements__unpack(NULL, msg_len, buf);
   if (msgs == NULL)
   {
-    fprintf(stderr, "error unpacking incoming message\n");
-    exit(1);
+    fprintf(stderr, "Error unpacking %s\n", fileName);
+    return;
   }
 
   timestamps = realloc(timestamps, (ntimestamps + msgs->n_measurements) * sizeof(struct timestamp));
@@ -464,7 +464,7 @@ int main(int argc, char **argv)
 
       fd = fopen(path, "r");
 
-      read_file(fd);
+      read_file(fd, path);
 
       fclose(fd);
     }
