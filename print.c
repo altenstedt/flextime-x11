@@ -33,6 +33,7 @@
 static unsigned int fixed = 60 * 10;
 static int splitWeeks = 0;
 static int read_local_data = 1;
+static int continue_on_error = 1;
 
 static size_t
 read_buffer (unsigned max_length, uint8_t *out, FILE* file)
@@ -69,7 +70,12 @@ void read_file(FILE* file, char *fileName) {
   if (msgs == NULL)
   {
     fprintf(stderr, "Error unpacking %s\n", fileName);
-    return;
+
+    if (continue_on_error) {
+      return;
+    } else {
+      exit(1);
+    }
   }
 
   timestamps = realloc(timestamps, (ntimestamps + msgs->n_measurements) * sizeof(struct timestamp));
@@ -306,6 +312,7 @@ static char doc[] = "Flextime -- tracking working hours";
 static char args_doc[] = "ARG1 ARG2";
 
 #define OPT_NO_LOCAL_DATA 1 // --no-local-data
+#define OPT_NO_CONTINUE_ON_ERROR 2 // --no-continue-on-error
 
 /* The options we understand. */
 static struct argp_option options[] = {
@@ -314,6 +321,7 @@ static struct argp_option options[] = {
   {"stop", 's', "date", 0, "Mark STOP getdate(3)" },
   {"mark", 'm', "date", 0, "Mark MEASUREMENT getdate(3)" },
   {"no-local-data", OPT_NO_LOCAL_DATA, 0, 0, "Do not read data from local files" },
+  {"no-continue-on-error", OPT_NO_CONTINUE_ON_ERROR, 0, 0, "Do not skip files with errors" },
   { 0 }
 };
 
@@ -326,6 +334,7 @@ struct arguments
   char *stop;
   char *mark;
   int no_local_data;
+  int no_continue_on_error;
 };
 
 /* Parse a single option. */
@@ -353,6 +362,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
     case OPT_NO_LOCAL_DATA:
       arguments->no_local_data = 1;
       break;
+    case OPT_NO_CONTINUE_ON_ERROR:
+      arguments->no_continue_on_error = 1;
+      break;
+
 
     case ARGP_KEY_ARG:
       if (state->arg_num >= 2)
@@ -388,6 +401,7 @@ int main(int argc, char **argv)
   arguments.stop = NULL;
   arguments.mark = NULL;
   arguments.no_local_data = 0;
+  arguments.no_continue_on_error = 0;
 
   /* Parse our arguments; every option seen by parse_opt will
      be reflected in arguments. */
@@ -396,6 +410,7 @@ int main(int argc, char **argv)
   fixed = arguments.idle * 60;
   splitWeeks = arguments.splitWeeks;
   read_local_data = !arguments.no_local_data;
+  continue_on_error = !arguments.no_continue_on_error;
 
   char* home = getenv("HOME");
 
