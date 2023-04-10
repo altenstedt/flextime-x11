@@ -1,3 +1,8 @@
+# 0.18.4
+
+Add option --no-continue-on-error (terminate program if a measurement
+file cannot be parsed.)
+
 # 0.18.3
 
 Handle failure to read measurement file by printing an error message

@@ -1,5 +1,5 @@
 Name:           flextime
-Version:        0.18.3
+Version:        0.18.4
 Release:        1%{?dist}
 Summary:        Track your working hours
 
@@ -43,6 +43,8 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Tue Apr 10 2023 Martin Altenstedt <Martin.Altenstedt@gmail.com> - 0.18.4-1
+- Flextime version 0.18.4
 * Tue Feb  7 2023 Martin Altenstedt <Martin.Altenstedt@gmail.com> - 0.18.3-1
 - Flextime version 0.18.3
 * Tue Aug 31 2021 Martin Altenstedt <Martin.Altenstedt@gmail.com> - 0.18.2-1
