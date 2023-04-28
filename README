@@ -2,10 +2,10 @@
 
 This directory holds Flextime, a program for tracking working hours.
 
-The Flextime daemon query X11 for the time since the last user input
-once every minute and stores the result on disk.  The flextime program
-can be used to display the times the user has been active on the
-computer.  For example:
+The Flextime daemon query D-Bus or X11 for the time since the last
+user input once every minute and stores the result on disk.  The
+flextime program can be used to display the times the user has been
+active on the computer.  For example:
 
     $ flextime
     20200810 07:16:50 — 16:10:22  8:53 | 0:27 w/33 Monday
@@ -22,13 +22,14 @@ time you log in.
 
 # Building
 
-`configure` will probe the system for dependencies.  On a Fedora 32
+`configure` will probe the system for dependencies.  On a Fedora 37
 system, I had to install the following packages:
 
 ```
 dnf install protobuf-c-compiler
 dnf install protobuf-c-devel
 dnf install libXScrnSaver-devel
+dnf install glib2-devel
 ```
 
 Using the follwing commands to find the packages:
@@ -37,11 +38,11 @@ Using the follwing commands to find the packages:
 dnf provides protoc-c
 dnf provides "*/protobuf-c/protobuf-c.h"
 dnf provides "*/extensions/scrnsaver.h"
+dnf provides "*/gio.h"
 ```
 
 I do not think that there are any runtime dependencies, except for
-X11.  I do not know how this relates to Wayland (I am apparently
-running X11).
+X11 and D-Bus (optional.)
 
 # Running the daemon
 
