@@ -11,6 +11,7 @@
 #include <signal.h>
 #include <syslog.h>
 #include <fcntl.h>
+#include <gio/gio.h>
 
 #include "config.h"
 #include "measurement.pb-c.h"
@@ -19,6 +20,7 @@
 
 static unsigned int foreground = 0;
 static unsigned int verbose = 0;
+static unsigned int verbose_level = 0;
 static unsigned int interval = 60; // seconds, should be called measurement interval
 
 Measurement measurements[PARENT_COUNT]; // the number of measurements within a flush
@@ -158,6 +160,62 @@ void initialize_measurements() {
   }
 }
 
+#if defined USE_GIO && USE_GIO == 1
+
+long
+get_idle_time_internal (GDBusProxy *proxy)
+{
+  guint64 user_idle_time;
+  gchar *method = "GetIdletime";
+  GError *error = NULL;
+  GVariant *ret = NULL;
+  
+  ret = g_dbus_proxy_call_sync(proxy,
+			       method,
+			       NULL,
+			       G_DBUS_CALL_FLAGS_NONE, -1,
+			       NULL, &error);
+  if (!ret) {
+    g_dbus_error_strip_remote_error (error);
+    if (verbose) internal_log(LOG_DEBUG, "GetIdletime returned %s.", error->message);
+    g_error_free (error);
+    return -1;
+  }
+
+  g_variant_get (ret, "(t)", &user_idle_time);
+  
+  g_variant_unref (ret);
+  
+  return user_idle_time / 1000;
+}
+
+long
+get_idle_time ()
+{
+  GDBusProxy *proxy = NULL;
+  gchar *name = "org.gnome.Mutter.IdleMonitor";
+  gchar *object_path = "/org/gnome/Mutter/IdleMonitor/Core";
+  gchar *interface_name = "org.gnome.Mutter.IdleMonitor";
+  /* Create a D-Bus proxy */
+  proxy = g_dbus_proxy_new_for_bus_sync (G_BUS_TYPE_SESSION,
+					 G_DBUS_PROXY_FLAGS_NONE,
+					 NULL,
+					 name,
+					 object_path,
+					 interface_name,
+					 NULL, NULL);
+  g_assert (proxy != NULL);
+  
+  long result = get_idle_time_internal (proxy);
+  
+  g_object_unref (proxy);
+  
+  return result;
+}
+
+
+#else /* USE_GIO */
+
 // https://stackoverflow.com/a/4702411
 long get_idle_time() {
   time_t idle_time;
@@ -182,6 +240,7 @@ long get_idle_time() {
 
   return idle_time;
 }
+#endif /* USE_GIO */
 
 int finishing = 0;
 
@@ -338,7 +397,7 @@ static char args_doc[] = "ARG1 ARG2";
 /* The options we understand. */
 static struct argp_option options[] = {
   {"foreground", 'f', 0, 0,  "Run in the foreground, not as a daemon" },
-  {"verbose", 'v', 0, 0,  "Print verbose output" },
+  {"verbose", 'v', "level", OPTION_ARG_OPTIONAL, "Print verbose output" },
   { 0 }
 };
 
@@ -348,6 +407,7 @@ struct arguments
   char *args[2];                /* arg1 & arg2 */
   int foreground;
   int verbose;
+  int verbose_level;
 };
 
 /* Parse a single option. */
@@ -364,8 +424,14 @@ parse_opt (int key, char *arg, struct argp_state *state)
       arguments->foreground = 1;
       break;
 
-    case 'v': 
+    case 'v':
       arguments->verbose = 1;
+      arguments->verbose_level = arg == NULL ? 0 : strlen(arg);
+
+      if (arguments->verbose_level > 0) {
+	internal_log(LOG_INFO, "Verbose level %d specified.", arguments->verbose_level);
+      }
+
       break;
 
     case ARGP_KEY_ARG:
@@ -399,6 +465,7 @@ int main(int argc, char **argv)
   /* Default values. */
   arguments.foreground = 0;
   arguments.verbose = 0;
+  arguments.verbose_level = 0;
 
   /* Parse our arguments; every option seen by parse_opt will
      be reflected in arguments. */
@@ -406,6 +473,7 @@ int main(int argc, char **argv)
 
   foreground = arguments.foreground;
   verbose = arguments.verbose;
+  verbose_level = arguments.verbose_level;
 
   char* home = getenv("HOME");
 
@@ -414,6 +482,14 @@ int main(int argc, char **argv)
     internal_log(LOG_NOTICE, "Flextime daemon %s started.", PACKAGE_VERSION);
   } else {
     if (verbose) internal_log(LOG_DEBUG, "Running in the foreground.");
+  }
+
+  if (verbose && (verbose_level > 0)) {
+#if defined USE_GIO && USE_GIO == 1
+    internal_log(LOG_DEBUG, "Collecting measurements using D-Bus.");
+#else
+    internal_log(LOG_DEBUG, "Collecting measurements using X11.");
+#endif /* USE_GIO */
   }
 
   char topFolderName[1024];

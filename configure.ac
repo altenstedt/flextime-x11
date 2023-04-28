@@ -19,6 +19,9 @@ AC_SEARCH_LIBS([XScreenSaverQueryInfo], [Xss])
 AC_SEARCH_LIBS([XScreenSaverAllocInfo], [Xss])
 AC_SEARCH_LIBS([protobuf_c_message_pack], [protobuf-c])
 AC_SEARCH_LIBS([argp_parse], [argp])
+PKG_CHECK_MODULES([GIO], [gio-2.0], [HAVE_GIO=1], [HAVE_GIO=0])
+AS_IF([test "x$HAVE_GIO" = x1], [AC_DEFINE([USE_GIO], [1], [Define that gio should be used.])])
+
 
 # Checks for header files.
 AC_PATH_X

@@ -10,14 +10,17 @@ Source0:        https://github.com/altenstedt/flextime-x11/releases/download/v%{
 BuildRequires: automake
 BuildRequires: autoconf
 BuildRequires: protobuf-c-compiler
-BuildRequires: protobuf-c-devel
-BuildRequires: libXScrnSaver-devel
+BuildRequires: pkgconfig(protobuf-c)
+BuildRequires: pkgconfig(libXScrnSaver)
+BuildRequires: pkgconfig(glib2)
+
+Recommends: dbus
 
 %description
-The Flextime daemon query X11 for the time since the last user input
-once every minute and stores the result on disk.  The flextime program
-can be used to display the times the user has been active on the
-computer
+The Flextime daemon query D-Bus or X11 for the time since the last
+user input once every minute and stores the result on disk.  The
+flextime program can be used to display the times the user has been
+active on the computer
 
 %prep
 %autosetup

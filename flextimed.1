@@ -10,10 +10,10 @@ flextimed \- a deamon for tracking working hours
 
 .SH DESCRIPTION
 
-The Flextime daemon query X11 for the time since the last user input
-once every minute and stores the result on disk.  The flextime program
-can be used to display the times the user has been active on the
-computer.  For example:
+The Flextime daemon query the system for the time since the last user
+input once every minute and stores the result on disk.  The flextime
+program can be used to display the times the user has been active on
+the computer.  For example:
 
     $ \fBflextime\fR
     20200810 07:16:50 — 16:10:22  8:53 | 0:27 w/33 Monday
@@ -28,6 +28,11 @@ effectively represents your working hours.
 Just make sure that the Flextime daemon, is started every time you log
 in.
 
+The system can be queried using X11 or D-Bus APIs, depending on your
+system.  D-Bus is the default since it is more reliable on a system
+that runs Wayland instead of X11.  To find out which is being used,
+use the \-v option twice (\-vv).
+
 .SH OPTIONS
 
 .TP
@@ -37,6 +42,10 @@ Run the program in the foreground, not as a daemon.
 .TP
 .BR \-v ", " \-\-verbose
 Print verbose output.
+
+Each instance of \-\-verbose on the command line increases the
+verbosity level.  For example, if you want to know which module is
+used to query the system for time since last user input, use \-vv.
 
 .TP
 .BR \-? ", " \-\-help
