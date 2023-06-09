@@ -1,3 +1,8 @@
+# 0.19.0
+
+Measure idle time using D-Bus, if available at compile time.
+Otherwise, use X11.
+
 # 0.18.4
 
 Add option --no-continue-on-error (terminate program if a measurement
