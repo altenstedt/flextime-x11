@@ -396,8 +396,8 @@ static char args_doc[] = "ARG1 ARG2";
 
 /* The options we understand. */
 static struct argp_option options[] = {
-  {"foreground", 'f', 0, 0,  "Run in the foreground, not as a daemon" },
-  {"verbose", 'v', "level", OPTION_ARG_OPTIONAL, "Print verbose output" },
+  {"foreground", 'f', 0, 0, "Run in the foreground, not as a daemon" },
+  {"verbose", 'v', 0, 0, "Print verbose output" },
   { 0 }
 };
 
@@ -426,11 +426,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case 'v':
       arguments->verbose = 1;
-      arguments->verbose_level = arg == NULL ? 0 : strlen(arg);
-
-      if (arguments->verbose_level > 0) {
-	internal_log(LOG_INFO, "Verbose level %d specified.", arguments->verbose_level);
-      }
+      arguments->verbose_level += 1;
 
       break;
 
@@ -484,7 +480,11 @@ int main(int argc, char **argv)
     if (verbose) internal_log(LOG_DEBUG, "Running in the foreground.");
   }
 
-  if (verbose && (verbose_level > 0)) {
+  if (verbose_level > 1) {
+    internal_log(LOG_INFO, "Verbose level %d specified.", verbose_level);
+  }
+
+  if (verbose && (verbose_level > 1)) {
 #if defined USE_GIO && USE_GIO == 1
     internal_log(LOG_DEBUG, "Collecting measurements using D-Bus.");
 #else
