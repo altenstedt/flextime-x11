@@ -9,7 +9,6 @@
 #include <sys/types.h>
 #include<sys/dir.h>
 #include <unistd.h>
-#include <X11/extensions/scrnsaver.h>
 #include <argp.h>
 #include <signal.h>
 #include <time.h>
