@@ -6,12 +6,16 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <X11/extensions/scrnsaver.h>
 #include <argp.h>
 #include <signal.h>
 #include <syslog.h>
 #include <fcntl.h>
+
+#if defined USE_GIO && USE_GIO == 1
 #include <gio/gio.h>
+#else
+#include <X11/extensions/scrnsaver.h>
+#endif /* USE_GIO */
 
 #include "config.h"
 #include "measurement.pb-c.h"

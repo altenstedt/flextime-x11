@@ -22,14 +22,21 @@ time you log in.
 
 # Building
 
-`configure` will probe the system for dependencies.  On a Fedora 37
-system, I had to install the following packages:
+`configure` will probe the system for dependencies.  On a Fedora
+system, I had to install the following packages for protobuf:
 
 ```
 dnf install protobuf-c-compiler
 dnf install protobuf-c-devel
-dnf install libXScrnSaver-devel
-dnf install glib2-devel
+```
+
+And then either `glib2-devel` for D-Bus (Wayland) or
+`libXScrnSaver-devel` for X11.  If you install both packages, flextime
+will query D-Bus by default.
+
+```
+dnf install glib2-devel # for D-Bus
+dnf install libXScrnSaver-devel # for X11
 ```
 
 Using the follwing commands to find the packages:
@@ -42,7 +49,7 @@ dnf provides "*/gio.h"
 ```
 
 I do not think that there are any runtime dependencies, except for
-X11 and D-Bus (optional.)
+X11 or D-Bus.
 
 # Running the daemon
 
